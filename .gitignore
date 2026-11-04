@@ -6,3 +6,4 @@ __pycache__/
 state/
 eval/peek_tmp.py
 eval/results.json
+!.env.example
