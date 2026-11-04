@@ -14,7 +14,7 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 **Inspector** opens any package Scout finds risky and reads its code. The archive is downloaded into memory and read as text. Nothing is installed, extracted to disk, imported or run. It looks for what real malware does: install hooks, code that goes online during install, machine and user details sent out, credentials and wallet files read, data sent to webhooks or data-collection services, decoded code being executed, shell commands, obfuscation.
 
-**Squat Watch** keeps this team's private list of package names its agents invented. It checks npm and PyPI every 5 minutes, and the moment one of those names gets registered, it alerts the room and hands the new package to Inspector. It also counts how often a name comes back: a name your agents invent again and again is exactly the one an attacker will grab.
+**Squat Watch** keeps this team's private list of package names its agents invented. It also learns which real packages the team installs and reads the npm and PyPI new-package feeds every 2 minutes: when someone publishes a brand-new name one typo away from one of them (say `expresss`), it warns the room before anyone asks for it. It checks npm and PyPI every 5 minutes, and the moment one of those names gets registered, it alerts the room and hands the new package to Inspector. It also counts how often a name comes back: a name your agents invent again and again is exactly the one an attacker will grab.
 
 **Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer records who approved it and when, and Scout shows that approval next time. Each room has its own rules.
 
@@ -78,7 +78,7 @@ Everything the crew shares goes through Switch. There is no queue, database or s
 3. If anything is wrong, Scout hands the case over with **one `send_targeted_message`**: "Inspector, read `npm:expres` · Squat Watch, watch `npm:number-to-words-indian` · Fixer, make this safe: `npm i …`". Switch turns it into an addressed event for each teammate.
 4. **Inspector**, **Squat Watch** and **Fixer** each verify on their own (nobody trusts another agent's verdict blindly) and post in the room as themselves.
 5. When a person types `approve esbuild`, Fixer writes it into the ledger with `create_room_document` / `update_room_document`. Scout sees it on the next check.
-6. When a watched name gets registered, Squat Watch alerts the room and hands the new package to Inspector with another targeted message.
+6. When a watched name gets registered, or a brand-new package imitates one the team installs, Squat Watch alerts the room and hands the new package to Inspector with another targeted message.
 7. When someone new joins the room (`room_join`), Fixer welcomes them with the room's rules.
 
 Because the agents only talk through Switch, each can run on its own machine: `python -u run_crew.py scout` on one, `python -u run_crew.py inspector` on another.

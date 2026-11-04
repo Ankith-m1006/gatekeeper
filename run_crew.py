@@ -35,7 +35,7 @@ async def main(names):
             jobs.append(a.run(Inspector(a).on_event))
         elif name == "squat-watch":
             sw = SquatWatch(a)
-            jobs += [a.run(sw.on_event), sw.watch_forever(), sw.publish_on_start()]
+            jobs += [a.run(sw.on_event), sw.watch_forever(), sw.fresh_forever(), sw.publish_on_start()]
         elif name == "fixer":
             fx = Fixer(a, RoomPolicy())
             jobs += [a.run(fx.on_event), fx.publish_on_start()]

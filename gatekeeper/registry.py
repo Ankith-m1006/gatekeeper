@@ -91,6 +91,17 @@ def _edit_distance(a: str, b: str, limit: int = 2) -> int:
     return d[-1][-1]
 
 
+def imitates(new: str, real: str) -> bool:
+    """True when `new` is a different name one typo away from `real` (the same test lookalike() uses)."""
+    a, b = _norm(new), _norm(real)
+    if a == b or len(b) < 4:
+        return False
+    if a.replace("-", "") == b.replace("-", ""):
+        return True
+    d = _edit_distance(a, b)
+    return d == 1 or (d == 2 and len(b) >= 8)
+
+
 def lookalike(ecosystem: str, name: str) -> str | None:
     """Return the popular package this name imitates, if any (and it is not that package)."""
     n = _norm(name)
