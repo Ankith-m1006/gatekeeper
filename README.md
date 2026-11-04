@@ -1,4 +1,11 @@
-<p align="center"><img src="assets/gatekeeper-icon.png" width="120" alt="Gatekeeper"></p>
+<p align="center"><img src="assets/social-preview.png" alt="Gatekeeper: a security crew of four AI agents in your team chat, built on Switch"></p>
+
+<p align="center">
+  <a href="https://github.com/Ankith-m1006/gatekeeper/actions/workflows/tests.yml"><img src="https://github.com/Ankith-m1006/gatekeeper/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
+  <img src="https://img.shields.io/badge/built%20on-Switch-1a1a1a" alt="built on Switch">
+  <img src="https://img.shields.io/badge/python-3.11%2B-1a1a1a" alt="python 3.11+">
+  <img src="https://img.shields.io/badge/license-MIT-1a1a1a" alt="MIT license">
+</p>
 
 # Gatekeeper
 
@@ -159,4 +166,4 @@ Without Docker: `python -m venv .venv && . .venv/bin/activate && pip install -r 
 
 ## Built with
 
-[Switch](https://github.com/sandbox-quantum/switch) for the rooms and agent identities, npm and PyPI public APIs, [npm-high-impact](https://github.com/wooorm/npm-high-impact) and [top-pypi-packages](https://github.com/hugovk/top-pypi-packages) for the popular lists, and Datadog's dataset for the eval. Built by voice with Wispr Flow for Flip the Switch by WeMakeDevs.
+[Switch](https://github.com/sandbox-quantum/switch) for the rooms and agent identities, npm and PyPI public APIs, [npm-high-impact](https://github.com/wooorm/npm-high-impact) and [top-pypi-packages](https://github.com/hugovk/top-pypi-packages) for the popular lists, and Datadog's dataset for the eval. Built by voice with Wispr Flow for Flip the Switch by WeMakeDevs. MIT licensed.
