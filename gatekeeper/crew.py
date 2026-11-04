@@ -1,52 +1,22 @@
-"""What the crew shares: one case per checked install, plus per-room rules and approvals.
+"""What the crew shares, all of it through Switch.
 
-Each agent still has its own Switch identity and posts in the room as itself. The case board is
-how they hand work to each other inside one process, so nobody has to parse another agent's prose.
+Scout hands work to the others with one targeted Switch message (each teammate reads its own line).
+Fixer keeps the room's rules and approvals in a Switch room document, the "Gatekeeper ledger", and
+Scout reads it before every check. Nothing is passed inside the process, so each agent can run
+on its own machine.
 """
 from __future__ import annotations
 
 import asyncio
+import re
 import json
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Awaitable, Callable
 
-from .registry import PackageReport
+from .registry import PackageReport  # noqa: F401  (type of key())
 
 STATE = Path(__file__).resolve().parent.parent / "state"
 CREW = {"scout", "inspector", "squat-watch", "fixer"}
-
-
-@dataclass
-class Case:
-    room_id: str
-    asked_by: str
-    text: str
-    reports: list[PackageReport]
-    opened: float = field(default_factory=time.time)
-
-    def worst(self) -> str:
-        order = ["ok", "approved", "suspicious", "danger", "ghost"]
-        return max((r.verdict for r in self.reports), key=order.index, default="ok")
-
-
-Listener = Callable[[Case], Awaitable[None]]
-
-
-class Board:
-    """Scout opens cases; the rest of the crew picks them up."""
-
-    def __init__(self) -> None:
-        self._listeners: list[Listener] = []
-
-    def subscribe(self, fn: Listener) -> None:
-        self._listeners.append(fn)
-
-    async def open(self, case: Case) -> None:
-        # Small pause so Scout's verdict lands in the room before the follow-ups.
-        await asyncio.sleep(1.5)
-        await asyncio.gather(*(fn(case) for fn in self._listeners), return_exceptions=True)
 
 
 # ---------------- per-room rules and approvals ----------------
@@ -96,3 +66,79 @@ class RoomPolicy:
 
 def key(r: PackageReport) -> str:
     return f"{r.ecosystem}:{r.name}"
+
+
+# ---------------- handoffs through Switch ----------------
+# Scout hands work over with one targeted Switch message. Each teammate gets an addressed event
+# and reads its own line; the humans in the room see the handoff as plain text.
+SAYS = {"inspector": "Inspector", "squat-watch": "Squat Watch", "fixer": "Fixer"}
+TOKEN = re.compile(r"`(npm|pypi):(@?[\w./-]+)`")
+
+
+def handoff(asker: str, inspect: list[str], watch: list[str], install_text: str | None) -> tuple[list[str], str]:
+    names, lines = [], []
+    if inspect:
+        names.append("inspector")
+        lines.append("• Inspector, read " + ", ".join(f"`{k}`" for k in inspect))
+    if watch:
+        names.append("squat-watch")
+        lines.append("• Squat Watch, watch " + ", ".join(f"`{k}`" for k in watch))
+    if install_text:
+        names.append("fixer")
+        lines.append("• Fixer, make this safe:\n```\n" + install_text.strip() + "\n```")
+    return names, f"Over to the crew ({asker}'s install):\n" + "\n".join(lines)
+
+
+def my_part(body: str, agent: str) -> str | None:
+    """The part of a handoff addressed to `agent`; Fixer's part runs to the end of the message."""
+    who = SAYS[agent]
+    i = body.find(f"• {who},")
+    if i < 0:
+        return None
+    rest = body[i:]
+    if agent != "fixer":
+        rest = rest.split("\n", 1)[0]
+    return rest
+
+
+def asker_of(body: str) -> str:
+    m = re.search(r"\((.+?)'s install\)", body)
+    return m.group(1) if m else "someone"
+
+
+def tokens(text: str) -> list[tuple[str, str]]:
+    return [(e.lower(), n) for e, n in TOKEN.findall(text)]
+
+
+# ---------------- the ledger: a Switch room document ----------------
+LEDGER = "Gatekeeper ledger"
+
+
+def ledger_text(room: dict) -> str:
+    r = {**DEFAULT_RULES, **room.get("rules", {})}
+    seen: dict[str, dict] = {}
+    for k, v in room.get("approved", {}).items():
+        seen.setdefault(k.split(":", 1)[1], v)
+    lines = [
+        "# Gatekeeper ledger",
+        "Rules and approvals for this room. Fixer keeps this document; Scout reads it before every check.",
+        "",
+        "## Rules",
+        f"- Packages younger than {r['min_age_days']} days need a person's approval.",
+        f"- Packages that run a script on install need approval: {'yes' if r['block_install_scripts'] else 'no'}.",
+        "",
+        "## Approved packages",
+    ]
+    lines += [f"- {n}: approved by {v['by']} on {v['at']}" for n, v in seen.items()] or ["- none yet"]
+    lines += ["", "```json", json.dumps({"rules": r, "approved": room.get("approved", {})}), "```"]
+    return "\n".join(lines)
+
+
+def parse_ledger(content: str | None) -> dict | None:
+    if not content:
+        return None
+    m = re.search(r"```json\s*(\{.*\})\s*```", content, re.S)
+    try:
+        return json.loads(m.group(1)) if m else None
+    except ValueError:
+        return None

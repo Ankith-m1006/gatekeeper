@@ -63,7 +63,9 @@ class Agent:
     api_key: str = ""
     connection_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     connected: bool = False
+    current_room: str | None = None
     _http: httpx.AsyncClient | None = None
+    _room_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # ---------- identity ----------
     def _state_file(self) -> Path:
@@ -131,6 +133,49 @@ class Agent:
             raise RuntimeError(f"message -> {r.status_code}: {r.text[:300]}")
         return r.json()
 
+    # ---------- room-bound operations ----------
+    async def _enter(self, room_id: str, force: bool = False) -> Any:
+        """Point this session at a room (Switch resolves room-bound ops from it)."""
+        if force or self.current_room != room_id:
+            res = await self.op("connect_to_room", room_id=room_id, include_general_instructions=False)
+            self.current_room = room_id
+            return res
+        return None
+
+    async def in_room(self, room_id: str, name: str, **args: Any) -> Any:
+        async with self._room_lock:
+            await self._enter(room_id)
+            return await self.op(name, **args)
+
+    async def hand_off(self, room_id: str, names: list[str], body: str) -> Any:
+        """Address teammates through Switch: they get an addressed event, the room sees the handoff."""
+        return await self.in_room(room_id, "send_targeted_message", body=body, target_names=names)
+
+    async def room_documents(self, room_id: str) -> list[dict]:
+        async with self._room_lock:
+            res = await self._enter(room_id, force=True)
+        return (res or {}).get("documents") or [] if isinstance(res, dict) else []
+
+    async def read_document(self, room_id: str, name: str) -> tuple[str | None, str | None]:
+        """Return (document id, content) of the room document with this name, if any."""
+        for d in await self.room_documents(room_id):
+            if d.get("name") == name:
+                got = await self.in_room(room_id, "load_internal_documents", ids=[d["id"]])
+                return d["id"], (got[0].get("content") if got else None)
+        return None, None
+
+    async def write_document(self, room_id: str, doc_id: str | None, name: str, description: str, content: str) -> str:
+        """Create or update a room document this agent owns; returns its id."""
+        if doc_id:
+            try:
+                await self.in_room(room_id, "update_room_document", document_id=doc_id, content=content)
+                return doc_id
+            except RuntimeError as e:
+                log.warning("%s could not update document %s, creating a new one: %s", self.name, doc_id, e)
+        res = await self.in_room(room_id, "create_room_document", name=name, description=description,
+                                 instructions="Kept up to date by the Gatekeeper crew. Read it; do not edit by hand.", content=content)
+        return (res or {}).get("id") or (res or {}).get("document_id") or ""
+
     # ---------- events ----------
     async def run(self, handler: Handler, rooms: list[str] | None = None) -> None:
         """Connect, answer pings, hand domain events to `handler`, reconnect forever."""
@@ -157,6 +202,7 @@ class Agent:
                         elif kind == "connection_state":
                             generation = data.get("generation", generation)
                             self.connected = True
+                            self.current_room = None  # a new connection starts unbound
                             log.info("%s connected: rooms=%s", self.name, data.get("rooms"))
                         elif kind == "gap":
                             cursor = data.get("resumed_at", cursor)

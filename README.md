@@ -61,24 +61,33 @@ Gatekeeper is not a bot with four names. It is four agents that each have their 
 
 ## How it works
 
+Everything the crew shares goes through Switch. There is no queue, database or shared memory between the agents.
+
 ```
  chat (Discord / Slack / ...)
+            │  the Switch bridge relays the channel
+      Switch room ─────────────── room documents: "Gatekeeper ledger" (Fixer), "Invented package names" (Squat Watch)
             │
-      Switch room  ◄── each agent has its own Switch identity and WebSocket connection
-            │
-   ┌────────┼────────────┬──────────────┐
- Scout   Inspector   Squat Watch      Fixer
-   │         ▲            ▲              ▲
-   └──── opens a case on the shared board ┘
+  Scout ── send_targeted_message ──► @inspector @squat-watch @fixer
+            each teammate gets an addressed Switch event and reads its own line;
+            the people in the room see the handoff as plain text
 ```
 
-- `gatekeeper/switch.py`: a small client for the Switch agent protocol (register, WebSocket events with ping/pong and reconnect, room messages, operations).
-- `gatekeeper/crew.py`: the case board Scout opens and the others subscribe to, plus per-room rules and approvals stored on disk.
+1. A person (or their coding agent's answer) posts an install line. Every agent's WebSocket gets the `message` event.
+2. **Scout** reads the room's rules and approvals from the **Gatekeeper ledger** room document (`connect_to_room`, `load_internal_documents`), checks each package live, and posts its verdict.
+3. If anything is wrong, Scout hands the case over with **one `send_targeted_message`**: "Inspector, read `npm:expres` · Squat Watch, watch `npm:number-to-words-indian` · Fixer, make this safe: `npm i …`". Switch turns it into an addressed event for each teammate.
+4. **Inspector**, **Squat Watch** and **Fixer** each verify on their own (nobody trusts another agent's verdict blindly) and post in the room as themselves.
+5. When a person types `approve esbuild`, Fixer writes it into the ledger with `create_room_document` / `update_room_document`. Scout sees it on the next check.
+6. When a watched name gets registered, Squat Watch alerts the room and hands the new package to Inspector with another targeted message.
+7. When someone new joins the room (`room_join`), Fixer welcomes them with the room's rules.
+
+Because the agents only talk through Switch, each can run on its own machine: `python -u run_crew.py scout` on one, `python -u run_crew.py inspector` on another.
+
+- `gatekeeper/switch.py`: a small client for the Switch agent protocol (register, WebSocket events with ping/pong, resume and reconnect, room-bound operations, targeted handoffs, room documents).
+- `gatekeeper/crew.py`: the handoff format and the ledger document format.
 - `gatekeeper/registry.py`: live npm and PyPI checks, and the lookalike test (Damerau-Levenshtein against the top 3,000 packages of each ecosystem).
 - `gatekeeper/inspect_pkg.py`: the in-memory archive reader and the rules.
 - `gatekeeper/scout.py`, `inspector.py`, `squat_watch.py`, `fixer.py`: the four agents.
-
-Each agent posts in the room as itself, so the team sees four voices, not one bot. They hand work to each other through the case board, so nobody parses another agent's prose.
 
 ## How well it works
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import re
 
-from .crew import CREW, Case
+from .crew import CREW, my_part, tokens
 from .inspect_pkg import Inspection, inspect
 from .switch import Agent, Event
 
@@ -38,17 +38,22 @@ class Inspector:
     def __init__(self, agent: Agent):
         self.agent = agent
 
-    async def on_case(self, case: Case) -> None:
-        # Only packages that exist can be read; ghosts belong to Squat Watch.
-        targets = [r for r in case.reports if r.exists and r.verdict in ("danger", "suspicious")]
-        if not targets:
-            return
-        results = await asyncio.gather(*(inspect(r.ecosystem, r.name) for r in targets[:4]))
-        await self.agent.send(case.room_id, "**I opened the package and read the code:**\n" + "\n".join(render(x) for x in results))
+    async def read_and_report(self, room_id: str, targets: list[tuple[str, str]], why: str = "") -> None:
+        results = await asyncio.gather(*(inspect(e, n) for e, n in targets[:4]))
+        head = "**I opened the package and read the code" + (f" ({why})" if why else "") + ":**\n"
+        await self.agent.send(room_id, head + "\n".join(render(x) for x in results))
 
     async def on_event(self, ev: Event) -> None:
-        """`@inspector npm:left-pad` or `@inspector pypi requests` inspects on demand."""
-        if ev.type != "message" or not ev.addressed or ev.sender.lower() in CREW:
+        """Handoffs from Scout or Squat Watch, or `@inspector npm:left-pad` from a person."""
+        if ev.type != "message" or not ev.addressed:
+            return
+        sender = ev.sender.lower()
+        if sender in ("scout", "squat-watch"):  # a teammate handed work over through Switch
+            part = my_part(ev.body, "inspector")
+            if part and (targets := tokens(part)):
+                await self.read_and_report(ev.room_id, targets, "just registered" if sender == "squat-watch" else "")
+            return
+        if sender in CREW:
             return
         m = ASK.search(ev.body)
         if not m:

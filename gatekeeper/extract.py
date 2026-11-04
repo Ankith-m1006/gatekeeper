@@ -7,6 +7,9 @@ import re
 _NPM = re.compile(r"\b(?:npm\s+(?:i|install|add)|yarn\s+add|pnpm\s+(?:add|i|install)|bun\s+(?:add|i|install)|npx)\s+([^\n`;&|]+)", re.I)
 _PIP = re.compile(r"\b(?:pip3?\s+install|python3?\s+-m\s+pip\s+install|uv\s+(?:add|pip\s+install)|poetry\s+add|pipenv\s+install)\s+([^\n`;&|]+)", re.I)
 
+# A whole line that installs something, for rewriting and handing over.
+INSTALL_LINE = re.compile(r"^.*\b(npm|yarn|pnpm|bun|npx|pip3?|uv|poetry|pipenv|python3?\s+-m\s+pip)\b.*$", re.I | re.M)
+
 _NPM_NAME = re.compile(r"^(@[a-z0-9][\w.-]*/)?[a-z0-9][\w.-]*$", re.I)
 _PY_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
