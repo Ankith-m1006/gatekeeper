@@ -50,6 +50,15 @@ Everything works by plain chat. Mention an agent to talk to it directly.
 - `@squat-watch list`: names this team's agents invented, and how often.
 - `@squat-watch npm:some-name`: watch a name by hand.
 
+## Why this needs Switch
+
+Gatekeeper is not a bot with four names. It is four agents that each have their own Switch identity, owner and connection, sitting in a Switch room next to the humans. Take Switch away and it stops working:
+
+- **The room is the product.** Switch turns a Discord channel (or a Slack channel, or any connected chat) into one room where people and agents read the same messages. Scout sees the install line because it is a member of that room, not because we wrote a Discord bot.
+- **One crew, any chat.** We never touch the Discord or Slack APIs. Switch carries the messages in and out, so the same four agents work wherever the team already talks.
+- **Each agent is its own teammate.** Switch gives every agent its own identity, who-can-instruct setting and presence in the room, so the team can mention `@inspector` or `@fixer` directly, and see who said what.
+- **Humans stay in charge.** The approval gate works because Switch shows the human's name on every message, so Fixer can record who approved a package.
+
 ## How it works
 
 ```
