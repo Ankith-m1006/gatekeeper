@@ -36,6 +36,7 @@ class SquatWatch:
         self.doc_texts: dict = data.pop("_doc_texts", {})  # room id -> last content we published
         self.team: dict = data.pop("_team", {})  # room id -> real packages this team installs ("eco:name")
         self.feed: dict = data.pop("_feed", {"npm_seq": None, "pypi_seen": [], "alerted": []})
+        self.dirty: set[str] = set()  # rooms whose document needs re-publishing
         self.items: dict = data
 
     def save(self) -> None:
@@ -142,7 +143,7 @@ class SquatWatch:
                     added = True
         if added:
             self.save()
-            await self.sync_doc(ev.room_id)
+            self.dirty.add(ev.room_id)  # published by fresh_forever, so a busy room gets one notice, not dozens
 
     def _matches(self, eco: str, new: str) -> list[tuple[str, str]]:
         """(room, real package) pairs that a newly published name imitates."""
@@ -205,6 +206,9 @@ class SquatWatch:
                 await self.fresh_once()
             except Exception:
                 log.exception("new-package feed poll failed")
+            for room in list(self.dirty):  # learned packages: one document update per room per poll
+                self.dirty.discard(room)
+                await self.sync_doc(room)
             await asyncio.sleep(FRESH_SECONDS)
 
     async def watch_forever(self) -> None:

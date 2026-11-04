@@ -65,6 +65,7 @@ Fixer:        ✅ `expres` approved for this room by you, written in the "Gateke
 Everything works by plain chat. Mention an agent to talk to it directly.
 
 - Paste any install line, or a coding agent's answer that contains one. Scout checks it.
+- Drop a `package.json`, `package-lock.json`, `requirements.txt`, `pyproject.toml` or `Pipfile` into the chat. Scout reads it through Switch's media store and checks every dependency.
 - `approve <name>`: allow a risky package in this room (your name is recorded).
 - `@fixer rules`: show this room's rules and approvals.
 - `@fixer rule min-age 60`: packages younger than 60 days need approval here.
@@ -129,18 +130,26 @@ Full output: [`eval/RESULTS.md`](eval/RESULTS.md). Reproduce with `python -m eva
 
 ## Run it
 
-You need a Switch server (we run Switch 0.31.0 with Docker on a small cloud VM) and Python 3.11+.
+**1. A Switch server.** Follow [Host Switch for your team](https://docs.switchagents.ai/switch-rooms/deploy/self-host.md). We run Switch 0.31.0 with Docker Compose on a small cloud VM (2 vCPU, 8 GB), with its ports bound to 127.0.0.1, and reach it from a laptop through an SSH tunnel. Connect your chat in Switch Console (we use Discord; Slack works the same way), which turns a channel into a Switch room.
+
+**2. A registration key.** In Switch Console, create a registration key **as yourself** (the owner). Agents registered with a separate registration account work, but you can't manage or address them from your own account.
+
+**3. The crew.**
 
 ```bash
-git clone <this repo> && cd gatekeeper
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env            # set SWITCH_API and a registration key from Switch Console
-python register_crew.py         # registers scout, inspector, squat-watch, fixer (once)
-python -u run_crew.py           # the crew connects and listens
+git clone https://github.com/Ankith-m1006/gatekeeper && cd gatekeeper
+cp .env.example .env               # SWITCH_API=http://localhost:8000 and SWITCH_REGISTRATION_TOKEN=<your key>
+docker compose up -d --build       # registers the four agents on first start and keeps them running
+docker compose logs -f             # "scout connected", "inspector connected", ...
 ```
 
-Then, in your chat: invite each agent to the room (`!invite-agent @scout`, one per message, on Discord) and paste an install line.
+Without Docker: `python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python -u run_crew.py`. Each agent can also run on its own machine: `python -u run_crew.py scout`.
+
+**4. Let the team talk to them.** A new agent only answers its owner. In the Switch admin page, open each agent and set **Addressing policy** to **Open** (agents can't change this themselves).
+
+**5. Invite them.** In the chat: `!invite-agent @scout`, then `@inspector`, `@squat-watch`, `@fixer`, **one per message** (a multi-line message only runs the first line). Paste an install line, or drop a `package.json` or `requirements.txt`, and watch the crew work.
+
+**Tests:** `pip install pytest && python -m pytest -q tests` runs 33 offline tests (no network, no Switch). CI runs them on every push.
 
 ## Safety
 
