@@ -22,26 +22,42 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 **Inspector** opens any package Scout finds risky and reads its code. The archive is downloaded into memory and read as text. Nothing is installed, extracted to disk, imported or run. It looks for what real malware does: install hooks, code that goes online during install, machine and user details sent out, credentials and wallet files read, data sent to webhooks or data-collection services, decoded code being executed, shell commands, obfuscation.
 
-**Squat Watch** keeps this team's private list of package names its agents invented. It also learns which real packages the team installs and reads the npm and PyPI new-package feeds every 2 minutes: when someone publishes a brand-new name one typo away from one of them (say `expresss`), it warns the room before anyone asks for it. It checks npm and PyPI every 5 minutes, and the moment one of those names gets registered, it alerts the room and hands the new package to Inspector. It also counts how often a name comes back: a name your agents invent again and again is exactly the one an attacker will grab.
+**Squat Watch** guards the names that don't exist yet. It keeps this team's list of package names its agents invented, checks npm and PyPI every 5 minutes, and the moment one gets registered it alerts the room and hands the new package to Inspector. It counts how often a name comes back: a name your agents invent again and again is exactly the one an attacker will grab. It also learns the real packages your team installs and reads the npm and PyPI new-package feeds every 2 minutes, so a brand-new lookalike (say `expresss`) is flagged before anyone asks for it.
 
-**Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer records who approved it and when, and Scout shows that approval next time. Each room has its own rules.
+**Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer writes who approved it and when into the room's **Gatekeeper ledger** (a Switch room document), and Scout reads that ledger before every check. Each room has its own rules, and Fixer welcomes new people to the room with them.
 
 ## What it looks like
 
+Real screenshots from our Discord room (a Switch room), in order: Scout checks the install and hands the case to the crew through Switch, the crew answers, Switch records their room documents, and Scout reads a person's approval back from the ledger.
+
+<p align="center">
+  <img src="assets/screens/handoff.jpg" width="24%" alt="Scout's verdict and the handoff to the crew">
+  <img src="assets/screens/crew-replies.jpg" width="24%" alt="Squat Watch, Inspector and Fixer answer">
+  <img src="assets/screens/room-documents.jpg" width="24%" alt="Switch shows the crew's room documents">
+  <img src="assets/screens/approved.jpg" width="24%" alt="Scout shows the approval from the ledger">
+</p>
+
+The same flow as text:
+
 ```
-you:        npm i expres axios number-to-words-indian
+you:          npm i expres axios number-to-words-indian
 
-Scout:      Stop: this install includes a package that does not exist.
-            ⚠️ expres (npm): 14y old, 6,928 downloads/week, 5 versions. one typo away from `express`
-            ✅ axios (npm): 12y old, 144,088,077 downloads/week, 147 versions.
-            👻 number-to-words-indian (npm): does not exist. If anyone registers it later, it is a trap.
+Scout:        Stop: this install includes a package that does not exist.
+              ⚠️ expres (npm): 14y old, 6,928 downloads/week, 5 versions. one typo away from `express`
+              ✅ axios (npm): 12y old, 144,088,077 downloads/week, 147 versions.
+              👻 number-to-words-indian (npm): does not exist. If anyone registers it later, it is a trap.
+              @inspector @squat-watch @fixer Over to the crew:
+              • Inspector, read `npm:expres`
+              • Squat Watch, watch `npm:number-to-words-indian`
+              • Fixer, make this safe: npm i expres axios number-to-words-indian
 
-Fixer:      🔧 Safe version (`expres` → `express`, `number-to-words-indian` removed):
-            npm i express axios
+Squat Watch:  👀 number-to-words-indian again: asked for 3 times. Something keeps inventing this name.
+Inspector:    🟢 expres@0.0.5: read 13 files, ran none. Nothing that steals, downloads or hides anything.
+Fixer:        🔧 Safe version (`expres` → `express`, `number-to-words-indian` removed):
+              npm i express axios
 
-Squat Watch: 👀 number-to-words-indian (npm) is on this team's watchlist now.
-
-Inspector:  🟢 expres@0.0.5: read 13 files, ran none. Nothing that steals, downloads or hides anything.
+you:          approve expres
+Fixer:        ✅ `expres` approved for this room by you, written in the "Gatekeeper ledger" document.
 ```
 
 ## Commands
@@ -66,6 +82,8 @@ Gatekeeper is not a bot with four names. It is four agents that each have their 
 - **One crew, any chat.** We never touch the Discord or Slack APIs. Switch carries the messages in and out, so the same four agents work wherever the team already talks.
 - **Each agent is its own teammate.** Switch gives every agent its own identity, who-can-instruct setting and presence in the room, so the team can mention `@inspector` or `@fixer` directly, and see who said what.
 - **Humans stay in charge.** The approval gate works because Switch shows the human's name on every message, so Fixer can record who approved a package.
+- **The crew coordinates through Switch, not behind it.** Scout hands work to its teammates with Switch's `send_targeted_message`, so the handoff is a message the whole team can read. There is no queue or shared memory between the agents: each one could run on a different machine.
+- **The team's memory lives in Switch.** The rules, approvals and the list of invented names are Switch room documents ("Gatekeeper ledger", "Invented package names") that every member of the room can open, and Switch announces every change in the chat.
 
 ## How it works
 
