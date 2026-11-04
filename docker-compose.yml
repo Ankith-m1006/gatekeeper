@@ -1,0 +1,12 @@
+# Runs the Gatekeeper crew next to a Switch server on the same machine.
+# SWITCH_API and SWITCH_REGISTRATION_TOKEN come from .env (see .env.example).
+services:
+  gatekeeper:
+    build: .
+    env_file: .env
+    environment:
+      TZ: Asia/Kolkata
+    volumes:
+      - ./state:/app/state
+    network_mode: host        # reach Switch at localhost:8000
+    restart: unless-stopped   # comes back on its own after a reboot

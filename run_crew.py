@@ -13,7 +13,8 @@ from gatekeeper.fixer import Fixer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
-env = dict(l.strip().split("=", 1) for l in open(".env") if "=" in l)
+from gatekeeper.crew import settings
+env = settings()
 
 CREW = {
     "scout": ("Scout", "Catches every new package your team or its coding agents bring in, and checks it live on npm and PyPI."),
@@ -42,4 +43,5 @@ async def main(names):
     await asyncio.gather(*jobs)
 
 
-asyncio.run(main(sys.argv[1:] or list(CREW)))
+if __name__ == "__main__":
+    asyncio.run(main(sys.argv[1:] or list(CREW)))

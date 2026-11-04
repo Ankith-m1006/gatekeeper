@@ -142,3 +142,18 @@ def parse_ledger(content: str | None) -> dict | None:
         return json.loads(m.group(1)) if m else None
     except ValueError:
         return None
+
+
+def settings() -> dict:
+    """SWITCH_API and SWITCH_REGISTRATION_TOKEN from the environment, or from a local .env file."""
+    import os
+    env: dict = {}
+    if Path(".env").exists():
+        for line in Path(".env").read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                env[k] = v
+    for k in ("SWITCH_API", "SWITCH_REGISTRATION_TOKEN"):
+        if os.environ.get(k):
+            env[k] = os.environ[k]
+    return env

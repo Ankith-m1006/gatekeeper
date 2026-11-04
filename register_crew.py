@@ -1,7 +1,8 @@
 """Register the Gatekeeper crew once (owned by whoever made the registration key)."""
 import asyncio
 from gatekeeper.switch import Agent
-env = dict(l.strip().split("=", 1) for l in open(".env") if "=" in l)
+from gatekeeper.crew import settings
+env = settings()
 CREW = [
     ("scout", "Scout", "Catches every new package your team or its coding agents bring in, and checks it live on npm and PyPI."),
     ("inspector", "Inspector", "Opens suspicious packages in a sandbox, without running them, and reports install scripts, network calls and hidden code."),
@@ -14,4 +15,5 @@ async def main():
         await a.ensure_registered()
         ctx = await a.op("get_my_context", _bind=False)
         print(name, a.agent_id, "owner:", ctx["person"]["name"])
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
