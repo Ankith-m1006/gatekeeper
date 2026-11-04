@@ -10,6 +10,14 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 ## The crew
 
+<p align="center">
+  <img src="assets/scout.svg" width="96" alt="Scout">&nbsp;&nbsp;
+  <img src="assets/inspector.svg" width="96" alt="Inspector">&nbsp;&nbsp;
+  <img src="assets/squat-watch.svg" width="96" alt="Squat Watch">&nbsp;&nbsp;
+  <img src="assets/fixer.svg" width="96" alt="Fixer">
+  <br><sub><b>Scout</b> · <b>Inspector</b> · <b>Squat Watch</b> · <b>Fixer</b></sub>
+</p>
+
 **Scout** reads every message in the room. When it sees an install command (npm, yarn, pnpm, bun, npx, pip, uv, poetry, pipenv), it checks each package live on npm or PyPI: does it exist, how old is it, how many downloads, how many versions, does it run a script on install, is it one typo away from a popular package.
 
 **Inspector** opens any package Scout finds risky and reads its code. The archive is downloaded into memory and read as text. Nothing is installed, extracted to disk, imported or run. It looks for what real malware does: install hooks, code that goes online during install, machine and user details sent out, credentials and wallet files read, data sent to webhooks or data-collection services, decoded code being executed, shell commands, obfuscation.

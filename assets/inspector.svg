@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220" viewBox="0 0 220 220">
+        <defs>
+          <radialGradient id="inspectFill" cx="28%" cy="20%" r="85%">
+            <stop offset="0" stop-color="#ffdda9"/><stop offset=".58" stop-color="#f8b875"/><stop offset="1" stop-color="#e9944c"/>
+          </radialGradient>
+          <linearGradient id="inspectEye" x2="0" y2="1"><stop stop-color="#30364b"/><stop offset="1" stop-color="#111827"/></linearGradient>
+          <filter id="shadow4" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
+        </defs>
+        <ellipse cx="110" cy="194" rx="72" ry="10" fill="#b47b4b" opacity=".17" filter="url(#shadow4)"/>
+        <rect x="28" y="28" width="164" height="164" rx="39" transform="rotate(-8 110 110)" fill="url(#inspectFill)"/>
+        <ellipse cx="81" cy="108" rx="10" ry="16" fill="url(#inspectEye)"/>
+        <ellipse cx="141" cy="103" rx="10" ry="16" fill="url(#inspectEye)"/>
+        <circle cx="78" cy="102" r="2.4" fill="#fff" opacity=".9"/><circle cx="138" cy="97" r="2.4" fill="#fff" opacity=".9"/>
+      </svg>

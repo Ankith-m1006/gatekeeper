@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220" viewBox="0 0 220 220">
+        <defs>
+          <radialGradient id="squatFill" cx="32%" cy="20%" r="82%">
+            <stop offset="0" stop-color="#edcaff"/><stop offset=".58" stop-color="#ce9af0"/><stop offset="1" stop-color="#a96cdb"/>
+          </radialGradient>
+          <linearGradient id="squatEye" x2="0" y2="1"><stop stop-color="#30364b"/><stop offset="1" stop-color="#111827"/></linearGradient>
+          <filter id="shadow3" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
+        </defs>
+        <ellipse cx="110" cy="194" rx="72" ry="10" fill="#8d65b0" opacity=".17" filter="url(#shadow3)"/>
+        <rect x="39" y="39" width="142" height="142" rx="32" transform="rotate(45 110 110)" fill="url(#squatFill)"/>
+        <ellipse cx="83" cy="111" rx="10" ry="15" fill="url(#squatEye)"/>
+        <ellipse cx="139" cy="111" rx="10" ry="15" fill="url(#squatEye)"/>
+        <circle cx="80" cy="105" r="2.4" fill="#fff" opacity=".9"/><circle cx="136" cy="105" r="2.4" fill="#fff" opacity=".9"/>
+      </svg>
