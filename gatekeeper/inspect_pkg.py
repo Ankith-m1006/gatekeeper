@@ -24,7 +24,8 @@ TEXT = (".js", ".cjs", ".mjs", ".ts", ".json", ".py", ".sh", ".bat", ".ps1", ".c
 # (severity, label, regex). severity: 3 = high, 2 = medium, 1 = low
 RULES: list[tuple[int, str, re.Pattern]] = [
     (2, "reads SSH keys, npm tokens or cloud credentials", re.compile(r"\.ssh[/\\]id_|\.npmrc|\.pypirc|\.aws[/\\]credentials|\.docker[/\\]config\.json|\.kube[/\\]config", re.I)),
-    (3, "touches browser or crypto-wallet data", re.compile(r"Login Data|Local State|\.config[/\\](google-chrome|BraveSoftware)|Exodus|MetaMask|electrum|wallet\.dat", re.I)),
+    # Case-sensitive and path-shaped, so "local state" in normal prose does not count.
+    (3, "touches browser or crypto-wallet data", re.compile(r"[/\\]Login Data\b|[/\\]Local State\b|\.config[/\\](google-chrome|BraveSoftware|discord)|(Google[/\\]Chrome|BraveSoftware|Exodus|Electrum|atomic)[/\\](User Data|exodus\.wallet|wallets|Local Storage)|nkbihfbeogaeaoehlefnkodbefgpgknn|wallet\.dat\b")),
     (3, "sends data to a Discord or Telegram webhook", re.compile(r"discord(app)?\.com/api/webhooks|api\.telegram\.org/bot", re.I)),
     (3, "downloads something and runs it", re.compile(r"(curl|wget)[^\n|;]{0,200}\|\s*(ba)?sh|Invoke-WebRequest[^\n]{0,200}(iex|Invoke-Expression)|powershell[^\n]{0,80}-enc", re.I)),
     (2, "decodes a hidden base64 payload", re.compile(r"(atob|b64decode|Buffer\.from)\s*\(\s*['\"][A-Za-z0-9+/=]{120,}")),
@@ -76,7 +77,8 @@ class Inspection:
             return "unknown"
         if any(f.severity == 3 for f in self.findings):
             return "malicious-looking"
-        if self.score >= 3:
+        # Risky = something runs at install/import time, or many medium signals pile up.
+        if self.install_scripts or any(f.autorun and f.severity >= 2 for f in self.findings) or self.score >= 6:
             return "risky"
         return "clean"
 
@@ -196,7 +198,7 @@ def _combos(res: Inspection, files: list[tuple[str, str]], hook_files: set[str])
         if m := CATCHER.search(text):
             add(3, "sends data to a known data-collection service", path, text, m)
         if base == "setup.py" and (hm := SETUP_HOOK.search(text)):
-            if NET.search(text) or HIDDEN.search(text) or re.search(r"subprocess|os\.system|exec\s*\(", text):
+            if NET.search(text) or HIDDEN.search(text):
                 add(3, "setup.py replaces the install step with its own code", path, text, hm)
         net, recon = NET.search(text), RECON.search(text)
         cred = RULES[0][2].search(text)
@@ -228,7 +230,12 @@ def analyze(res: Inspection, members) -> Inspection:
             except (ValueError, AttributeError):
                 pass
         res.findings += scan_text(path, text)
-    _combos(res, files, _hook_targets(res.install_scripts))
+    hooks = _hook_targets(res.install_scripts)
+    _combos(res, files, hooks)
+    # A shell script or build config in the archive only matters if an install hook runs it.
+    for f in res.findings:
+        if f.file.endswith((".sh", ".bat", ".ps1", ".cmd", ".toml", ".cfg", ".txt")) and not any(f.file.endswith(h) for h in hooks):
+            f.severity = min(f.severity, 1)
     if res.files_read == 0 and not res.error:
         res.error = "no readable source files in the archive"
     # One line per label is enough for a chat message; keep the worst instance.

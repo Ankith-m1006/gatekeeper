@@ -28,6 +28,8 @@ RAW = f"https://raw.githubusercontent.com/{REPO}/main/"
 OUT = Path(__file__).resolve().parent
 N_BAD = int(sys.argv[1]) if len(sys.argv) > 1 else 200      # per ecosystem
 N_GOOD = int(sys.argv[2]) if len(sys.argv) > 2 else 500     # per ecosystem
+GOOD_FROM = int(sys.argv[3]) if len(sys.argv) > 3 else 0     # 0 = tuning batch, 500 = held-out batch
+ONLY = sys.argv[4] if len(sys.argv) > 4 else "all"           # all | benign
 SEM = asyncio.Semaphore(12)
 
 
@@ -109,18 +111,19 @@ def report(rows: list[dict]) -> str:
 async def main() -> None:
     with httpx.Client(timeout=60, follow_redirects=True, headers={"User-Agent": "gatekeeper-eval"}) as c:
         bad_paths = {eco: pick(tree(c, eco), N_BAD) for eco in ("npm", "pypi")}
-    good = {eco: [l.strip() for l in (DATA / f"popular-{eco}.txt").read_text().splitlines() if l.strip() and not l.startswith("#")][:N_GOOD] for eco in ("npm", "pypi")}
+    good = {eco: [l.strip() for l in (DATA / f"popular-{eco}.txt").read_text().splitlines() if l.strip() and not l.startswith("#")][GOOD_FROM:GOOD_FROM + N_GOOD] for eco in ("npm", "pypi")}
     async with httpx.AsyncClient(timeout=60, follow_redirects=True, headers={"User-Agent": "gatekeeper-eval"}) as c:
-        jobs = [bad_one(c, eco, p) for eco, ps in bad_paths.items() for p in ps]
+        jobs = [] if ONLY == "benign" else [bad_one(c, eco, p) for eco, ps in bad_paths.items() for p in ps]
         jobs += [good_one(eco, n) for eco, ns in good.items() for n in ns]
         rows = []
         for i, fut in enumerate(asyncio.as_completed(jobs), 1):
             rows.append(await fut)
             if i % 100 == 0:
                 print(f"{i}/{len(jobs)}", flush=True)
-    (OUT / "results.json").write_text(json.dumps(rows, indent=1))
+    tag = f"-{ONLY}-{GOOD_FROM}" if (ONLY != "all" or GOOD_FROM) else ""
+    (OUT / f"results{tag}.json").write_text(json.dumps(rows, indent=1))
     md = report(rows)
-    (OUT / "RESULTS.md").write_text(md)
+    (OUT / f"RESULTS{tag}.md").write_text(md)
     print(md)
 
 
