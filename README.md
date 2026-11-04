@@ -120,9 +120,9 @@ Because the agents only talk through Switch, each can run on its own machine: `p
 
 We measured Inspector on **real malware** from Datadog's open [malicious software packages dataset](https://github.com/DataDog/malicious-software-packages-dataset) (packages removed from npm and PyPI after human triage) and on the **most popular real packages**. The rules were tuned on one set of samples; the numbers below come from samples that were held out until the end.
 
-**npm:** of 200 malicious packages never seen during tuning, Inspector flagged **60%** (37% outright "malicious-looking"). Of 500 popular packages, it wrongly called **1 (0.2%)** malicious and asked for a human look on 0.8%.
+**npm:** of 200 malicious packages never seen during tuning, Inspector flagged **60.5%** (38% outright "malicious-looking"). Of 500 popular packages, it wrongly called **1 (0.2%)** malicious and asked for a human look on 0.8%.
 
-**PyPI:** of 196 held-out malicious packages, it flagged **84%** (65% outright). Of 470 popular packages, it wrongly called 1.5% malicious and asked for a human look on 8.3%.
+**PyPI:** of 196 held-out malicious packages, it flagged **84%** (70% outright). Of 470 popular packages, it wrongly called 1.5% malicious and asked for a human look on 8.3%.
 
 Full output: [`eval/RESULTS.md`](eval/RESULTS.md). Reproduce with `python -m eval.run_eval 200 500 500` (run it on a throwaway machine: the samples are real malware, read in memory only).
 
