@@ -169,3 +169,29 @@ def test_empty_archive_is_unknown_not_clean():
 
 def test_prose_is_not_wallet_theft():
     assert not [f for f in scan_text("README.md", "Keep the local state of the editor") if "wallet" in f.label]
+
+
+# ---------- dependency files dropped into chat ----------
+
+def test_package_json_and_lockfile():
+    from gatekeeper.extract import packages_in_file
+    pj = '{"dependencies": {"expres": "^1", "@types/node": "20"}, "devDependencies": {"lodahs": "1"}}'
+    assert packages_in_file("package.json", pj) == [("npm", "expres"), ("npm", "@types/node"), ("npm", "lodahs")]
+    lock = '{"packages": {"": {"dependencies": {"axios": "1"}}, "node_modules/x": {}}}'
+    assert packages_in_file("package-lock.json", lock) == [("npm", "axios")]
+
+
+def test_requirements_and_pyproject():
+    from gatekeeper.extract import packages_in_file
+    req = "reqeusts==2.0\n# comment\nflask[async]>=3\n-r other.txt\ngit+https://x/y.git\n"
+    assert packages_in_file("requirements-dev.txt", req) == [("pypi", "reqeusts"), ("pypi", "flask")]
+    pp = '[project]\ndependencies = ["httpx>=0.27", "rich"]\n\n[tool.poetry.dependencies]\npython = "^3.11"\nnumpyy = "1"\n'
+    assert packages_in_file("pyproject.toml", pp) == [("pypi", "httpx"), ("pypi", "rich"), ("pypi", "numpyy")]
+
+
+def test_is_dep_file_and_install_lines():
+    from gatekeeper.extract import is_dep_file
+    from gatekeeper.scout import install_lines
+    assert is_dep_file("app/requirements.txt") and is_dep_file("package.json") and not is_dep_file("README.md")
+    assert install_lines([("npm", "expres"), ("pypi", "reqeusts"), ("npm", "lodahs")]) == "npm i expres lodahs\npip install reqeusts"
+    assert rewrite(install_lines([("npm", "expres")]), {"expres": "express"}) == ["npm i express"]

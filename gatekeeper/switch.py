@@ -133,6 +133,18 @@ class Agent:
             raise RuntimeError(f"message -> {r.status_code}: {r.text[:300]}")
         return r.json()
 
+    async def download(self, room_id: str, mxc: str, limit: int = 2 * 1024 * 1024) -> bytes:
+        """Fetch an attachment's bytes from Switch's media store (attachments arrive as pointers)."""
+        async with self.http.stream("GET", f"/agents/{self.agent_id}/rooms/{room_id}/media", params={"mxc": mxc}) as r:
+            if r.status_code >= 400:
+                raise RuntimeError(f"media -> {r.status_code}")
+            buf = bytearray()
+            async for chunk in r.aiter_bytes():
+                buf += chunk
+                if len(buf) > limit:
+                    raise RuntimeError("attachment larger than 2 MB, not reading it")
+        return bytes(buf)
+
     # ---------- room-bound operations ----------
     async def _enter(self, room_id: str, force: bool = False) -> Any:
         """Point this session at a room (Switch resolves room-bound ops from it)."""

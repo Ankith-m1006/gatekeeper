@@ -7,8 +7,7 @@ import time
 
 from . import registry
 from .crew import CREW, DEFAULT_RULES, LEDGER, RoomPolicy, handoff, key, parse_ledger
-from .extract import INSTALL_LINE
-from .extract import packages_in
+from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file
 from .switch import Agent, Event
 
 log = logging.getLogger(__name__)
@@ -16,6 +15,7 @@ log = logging.getLogger(__name__)
 ICON = {"ghost": "👻", "danger": "⛔", "suspicious": "⚠️", "ok": "✅"}
 LINK = {"npm": "https://www.npmjs.com/package/{}", "pypi": "https://pypi.org/project/{}/"}
 ORDER = ["ok", "suspicious", "danger", "ghost"]
+NL = "\n"
 
 
 def describe(r: registry.PackageReport, approval: dict | None = None) -> str:
@@ -34,10 +34,20 @@ def describe(r: registry.PackageReport, approval: dict | None = None) -> str:
     facts.append(f"{r.versions} versions")
     line = f"{head}: {', '.join(facts)}. <{LINK[r.ecosystem].format(r.name)}>"
     if r.flags:
-        line += "\n   ↳ " + "; ".join(r.flags)
+        line += NL + "   ↳ " + "; ".join(r.flags)
     if approval and r.verdict != "ok":
-        line += f"\n   ↳ approved for this room by {approval['by']} ({approval['at']})"
+        line += NL + f"   ↳ approved for this room by {approval['by']} ({approval['at']})"
     return line
+
+
+def install_lines(pkgs: list[tuple[str, str]]) -> str:
+    """Describe a list of packages as install lines (one per ecosystem), so Fixer can rewrite them."""
+    lines = []
+    for eco, cmd in (("npm", "npm i "), ("pypi", "pip install ")):
+        names = [n for e, n in pkgs if e == eco]
+        if names:
+            lines.append(cmd + " ".join(names))
+    return NL.join(lines)
 
 
 class Scout:
@@ -65,17 +75,41 @@ class Scout:
         return data
 
     async def on_event(self, ev: Event) -> None:
-        if ev.type != "message" or not ev.body:
+        if ev.type != "message":
             return
         if ev.sender.lower() in CREW:  # never re-check the crew's own posts
             return
+        files = [a for a in (ev.payload.get("attachments") or []) if is_dep_file(str(a.get("filename", "")))]
+        if files:
+            await self.check_files(ev, files)
+        if not ev.body:
+            return
         pkgs = packages_in(ev.body)
         if not pkgs:
-            if ev.addressed:
-                await self.agent.send(ev.room_id, "I check every package your team or its coding agents are about to install. Paste an `npm install` or `pip install` line, or ask a coding agent for one, and I'll check it live.")
+            if ev.addressed and not files:
+                await self.agent.send(ev.room_id, "I check every package your team or its coding agents are about to install. Paste an `npm install` or `pip install` line, drop a `package.json` or `requirements.txt`, or ask a coding agent for one, and I'll check it live.")
             return
+        install = NL.join(m.group(0).strip().strip("`") for m in INSTALL_LINE.finditer(ev.body))
+        await self.check(ev, pkgs[:8], install, source=None)
+
+    async def check_files(self, ev: Event, files: list[dict]) -> None:
+        """A dependency file dropped into the chat: read it through Switch's media store and check what it declares."""
+        for a in files[:3]:
+            name = str(a.get("filename"))
+            try:
+                text = (await self.agent.download(ev.room_id, str(a.get("mxc")))).decode("utf-8", "replace")
+            except Exception as e:
+                await self.agent.send(ev.room_id, f"I couldn't read `{name}` ({e}).")
+                continue
+            pkgs = packages_in_file(name, text)
+            if not pkgs:
+                await self.agent.send(ev.room_id, f"`{name}` doesn't declare any packages I can check.")
+                continue
+            await self.check(ev, pkgs[:25], "", source=(name, len(pkgs)))
+
+    async def check(self, ev: Event, pkgs: list[tuple[str, str]], install: str, source: tuple[str, int] | None) -> None:
         reports, ledger = await asyncio.gather(
-            asyncio.gather(*(registry.check(e, n) for e, n in pkgs[:8])),
+            asyncio.gather(*(registry.check(e, n) for e, n in pkgs)),
             self.room_ledger(ev.room_id),
         )
         rules = {**DEFAULT_RULES, **ledger.get("rules", {})}
@@ -94,13 +128,23 @@ class Scout:
             "suspicious": "Check before installing:",
             "ok": "Approved here, and the rest look fine:" if len(live) < len(reports) else "These look fine:",
         }[worst]
-        body = f"**{title}**\n" + "\n".join(describe(r, approvals[key(r)]) for r in reports)
+        if source:  # a whole file: list only what needs attention
+            fname, total = source
+            shown = [r for r in reports if r.verdict != "ok" or approvals[key(r)]]
+            fine = len(reports) - len(shown)
+            more = f" (first {len(reports)} of {total})" if total > len(reports) else ""
+            body = f"📄 **{fname}**: checked {len(reports)} dependencies{more}. **{title}**" + NL + NL.join(describe(r, approvals[key(r)]) for r in shown)
+            if fine:
+                body += NL + f"✅ {fine} other{'s' if fine != 1 else ''} look fine."
+        else:
+            body = f"**{title}**" + NL + NL.join(describe(r, approvals[key(r)]) for r in reports)
         await self.agent.send(ev.room_id, body)
         if worst == "ok":
             return
         # Hand the case to the crew through Switch, as one addressed message the team can read.
         inspect = [key(r) for r in live if r.exists and r.verdict in ("danger", "suspicious")][:4]
         watch = [key(r) for r in live if r.verdict == "ghost"]
-        install = "\n".join(m.group(0).strip().strip("`") for m in INSTALL_LINE.finditer(ev.body))
+        if source:  # from a file, Fixer only needs the packages with problems
+            install = install_lines([(r.ecosystem, r.name) for r in live if r.verdict != "ok"])
         names, body = handoff(ev.sender or "someone", inspect, watch, install)
         await self.agent.hand_off(ev.room_id, names, body)

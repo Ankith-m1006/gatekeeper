@@ -47,3 +47,55 @@ def packages_in(text: str) -> list[tuple[str, str]]:
                 if name and (eco, name) not in found:
                     found.append((eco, name))
     return found
+
+
+# ---------- dependency files dropped into the chat ----------
+DEP_FILES = ("package.json", "package-lock.json", "requirements", "pyproject.toml", "pipfile")
+
+
+def is_dep_file(filename: str) -> bool:
+    f = filename.lower().rsplit("/", 1)[-1]
+    return f in ("package.json", "package-lock.json", "pyproject.toml", "pipfile") or (f.startswith("requirements") and f.endswith((".txt", ".in")))
+
+
+def packages_in_file(filename: str, text: str) -> list[tuple[str, str]]:
+    """Dependencies declared in a package.json, package-lock.json, requirements*.txt, pyproject.toml or Pipfile."""
+    import json
+
+    f = filename.lower().rsplit("/", 1)[-1]
+    found: list[tuple[str, str]] = []
+
+    def add(eco: str, raw: str) -> None:
+        name = (_clean_npm if eco == "npm" else _clean_py)(raw)
+        if name and (eco, name) not in found:
+            found.append((eco, name))
+
+    if f in ("package.json", "package-lock.json"):
+        try:
+            d = json.loads(text)
+        except ValueError:
+            return found
+        if f == "package-lock.json":  # only what the project itself asks for, not the whole tree
+            d = (d.get("packages") or {}).get("") or d
+        for section in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+            for name in (d.get(section) or {}):
+                add("npm", name)
+    elif f.startswith("requirements"):
+        for line in text.splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line and not line.startswith(("-", "git+", "http")):
+                add("pypi", line)
+    elif f == "pyproject.toml":
+        # PEP 621 `dependencies = [...]` and Poetry `[tool.poetry.dependencies]` tables, without a TOML parser
+        for block in re.findall(r"dependencies\s*=\s*\[(.*?)\]", text, re.S):
+            for raw in re.findall(r"['\"]([^'\"]+)['\"]", block):
+                add("pypi", raw)
+        for table in re.findall(r"\[tool\.poetry\.(?:group\.\w+\.)?dependencies\]\s*\n(.*?)(?:\n\[|\Z)", text, re.S):
+            for name in re.findall(r"^\s*([A-Za-z0-9][\w.-]*)\s*=", table, re.M):
+                if name.lower() != "python":
+                    add("pypi", name)
+    elif f == "pipfile":
+        for table in re.findall(r"\[(?:dev-)?packages\]\s*\n(.*?)(?:\n\[|\Z)", text, re.S):
+            for name in re.findall(r"^\s*([A-Za-z0-9][\w.-]*)\s*=", table, re.M):
+                add("pypi", name)
+    return found
