@@ -57,7 +57,10 @@ class Scout:
         except Exception as e:  # Switch unreachable: fall back to the local copy
             log.warning("scout could not read the ledger: %s", e)
         if data is None:
+            log.info("scout: no ledger document in room %s yet, using the local copy", room_id[:8])
             data = {"rules": self.policy.rules(room_id), "approved": self.policy.approvals(room_id)}
+        else:
+            log.info("scout: read the ledger from the Switch room document (%d approvals)", len(data.get("approved", {})))
         self._ledger[room_id] = (time.time(), data)
         return data
 

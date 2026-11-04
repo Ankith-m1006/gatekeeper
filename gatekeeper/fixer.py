@@ -148,3 +148,11 @@ class Fixer:
                 f"• approved here: {approved}\n"
                 "Approve with `approve <name>`; take back with @fixer revoke <name>."
             ))
+
+    async def publish_on_start(self) -> None:
+        """Once connected, make sure every known room has an up-to-date ledger document."""
+        while not self.agent.connected:
+            await asyncio.sleep(1)
+        rooms = [r["room_id"] for r in (await self.agent.op("list_rooms", _bind=False) or []) if not r.get("archived")]
+        for room_id in rooms:
+            await self.sync_ledger(room_id)

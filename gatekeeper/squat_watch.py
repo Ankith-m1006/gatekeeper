@@ -145,3 +145,11 @@ class SquatWatch:
             mine.sort(key=lambda i: -i["seen"])
             rows = [f"{'🚨 registered ' + i['registered'] if i['registered'] else '👀'} **{i['name']}** ({i['eco']}), asked for {i['seen']}×, first {i['first']}" for i in mine[:15]]
             await self.agent.send(ev.room_id, "**Names this team's agents invented:**\n" + "\n".join(rows))
+
+    async def publish_on_start(self) -> None:
+        """Once connected, make sure every room has its "Invented package names" document."""
+        while not self.agent.connected:
+            await asyncio.sleep(1)
+        rooms = [r["room_id"] for r in (await self.agent.op("list_rooms", _bind=False) or []) if not r.get("archived")]
+        for room_id in rooms:
+            await self.sync_doc(room_id)

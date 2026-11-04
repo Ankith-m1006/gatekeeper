@@ -118,12 +118,12 @@ class Agent:
             )
         return self._http
 
-    async def op(self, name: str, _bind: bool = True, **args: Any) -> Any:
+    async def op(self, op_name: str, _bind: bool = True, **args: Any) -> Any:
         """Call an operation. `_bind` sends the connection id so room-bound ops know the room."""
         headers = {"X-Switch-Connection-Id": self.connection_id} if (_bind and self.connected) else {}
-        r = await self.http.post(f"/agents/{self.agent_id}/ops/{name}", json=args, headers=headers)
+        r = await self.http.post(f"/agents/{self.agent_id}/ops/{op_name}", json=args, headers=headers)
         if r.status_code >= 400:
-            raise RuntimeError(f"{name} -> {r.status_code}: {r.text[:300]}")
+            raise RuntimeError(f"{op_name} -> {r.status_code}: {r.text[:300]}")
         return r.json().get("result")
 
     async def send(self, room_id: str, text: str) -> Any:
@@ -142,10 +142,10 @@ class Agent:
             return res
         return None
 
-    async def in_room(self, room_id: str, name: str, **args: Any) -> Any:
+    async def in_room(self, room_id: str, op_name: str, **args: Any) -> Any:
         async with self._room_lock:
             await self._enter(room_id)
-            return await self.op(name, **args)
+            return await self.op(op_name, **args)
 
     async def hand_off(self, room_id: str, names: list[str], body: str) -> Any:
         """Address teammates through Switch: they get an addressed event, the room sees the handoff."""

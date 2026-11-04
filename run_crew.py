@@ -35,9 +35,10 @@ async def main(names):
             jobs.append(a.run(Inspector(a).on_event))
         elif name == "squat-watch":
             sw = SquatWatch(a)
-            jobs += [a.run(sw.on_event), sw.watch_forever()]
+            jobs += [a.run(sw.on_event), sw.watch_forever(), sw.publish_on_start()]
         elif name == "fixer":
-            jobs.append(a.run(Fixer(a, RoomPolicy()).on_event))
+            fx = Fixer(a, RoomPolicy())
+            jobs += [a.run(fx.on_event), fx.publish_on_start()]
     await asyncio.gather(*jobs)
 
 
