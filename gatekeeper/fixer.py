@@ -43,12 +43,15 @@ class Fixer:
     async def sync_ledger(self, room_id: str) -> None:
         """Write this room's rules and approvals into the Switch room document."""
         room = self.policy._room(room_id)
+        text = ledger_text({k: v for k, v in room.items() if k in ("rules", "approved")})
+        if room.get("doc_id") and room.get("doc_text") == text:
+            return  # nothing changed; don't post an "updated" notice into the room
         try:
             doc_id = await self.agent.write_document(
                 room_id, room.get("doc_id"), LEDGER,
-                "Rules and human approvals for packages in this room, kept by Fixer.", ledger_text(room))
-            if doc_id and doc_id != room.get("doc_id"):
-                room["doc_id"] = doc_id
+                "Rules and human approvals for packages in this room, kept by Fixer.", text)
+            if doc_id:
+                room["doc_id"], room["doc_text"] = doc_id, text
                 self.policy.save()
         except Exception as e:
             log.warning("fixer could not write the ledger: %s", e)

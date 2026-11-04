@@ -31,11 +31,12 @@ class SquatWatch:
         self.file: Path = STATE / "watchlist.json"
         data = json.loads(self.file.read_text()) if self.file.exists() else {}
         self.docs: dict = data.pop("_docs", {})  # room id -> Switch document id
+        self.doc_texts: dict = data.pop("_doc_texts", {})  # room id -> last content we published
         self.items: dict = data
 
     def save(self) -> None:
         STATE.mkdir(exist_ok=True)
-        self.file.write_text(json.dumps({**self.items, "_docs": self.docs}, indent=1))
+        self.file.write_text(json.dumps({**self.items, "_docs": self.docs, "_doc_texts": self.doc_texts}, indent=1))
 
     def add(self, eco: str, name: str, room_id: str, by: str) -> tuple[dict, bool]:
         k = f"{eco}:{name}"
@@ -61,11 +62,14 @@ class SquatWatch:
 
     async def sync_doc(self, room_id: str) -> None:
         docs = self.docs
+        text = self.doc_text(room_id)
+        if docs.get(room_id) and self.doc_texts.get(room_id) == text:
+            return  # nothing changed; don't post an "updated" notice into the room
         try:
             doc_id = await self.agent.write_document(room_id, docs.get(room_id), self.DOC,
-                                                     "Names our agents invented, watched by Squat Watch.", self.doc_text(room_id))
-            if doc_id and doc_id != docs.get(room_id):
-                docs[room_id] = doc_id
+                                                     "Names our agents invented, watched by Squat Watch.", text)
+            if doc_id:
+                docs[room_id], self.doc_texts[room_id] = doc_id, text
                 self.save()
         except Exception as e:
             log.warning("squat watch could not write its document: %s", e)
