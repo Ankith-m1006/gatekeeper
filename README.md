@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/gatekeeper-icon-512.png" width="120" alt="Gatekeeper"></p>
+<p align="center"><img src="assets/gatekeeper-icon.png" width="120" alt="Gatekeeper"></p>
 
 # Gatekeeper
 
