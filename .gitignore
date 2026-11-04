@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 *.pyc
 state/
+eval/peek_tmp.py
+eval/results.json
