@@ -40,9 +40,9 @@ class Fixer:
         swaps: dict[str, str | None] = {}
         need_ok: list[str] = []
         for r in case.reports:
-            if r.verdict in ("ghost", "danger"):
-                swaps[r.name] = r.similar_to  # the real package, or drop it
-            elif r.verdict == "suspicious":
+            if r.verdict == "ghost" or r.similar_to:
+                swaps[r.name] = r.similar_to  # the real package it imitates, or drop it
+            elif r.verdict in ("suspicious", "danger"):
                 need_ok.append(r.name)
         lines = []
         fixed = rewrite(case.text, swaps) if swaps else []
@@ -70,7 +70,7 @@ class Fixer:
             ecos = [m.group(1).lower()] if m.group(1) else ["npm", "pypi"]
             for eco in ecos:
                 self.policy.approve(ev.room_id, f"{eco}:{name}", ev.sender or "someone")
-            await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'}. Scout will show the approval next time; `@fixer revoke {name}` takes it back.")
+            await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'}. Scout will show the approval next time; say @fixer revoke {name} to take it back.")
             return
         if not ev.addressed:
             return
@@ -87,15 +87,18 @@ class Fixer:
                 self.policy.set_rule(ev.room_id, "block_install_scripts", val == "on")
                 await self.agent.send(ev.room_id, f"Rule set: packages that run a script on install {'now need' if val == 'on' else 'no longer need'} approval in this room.")
             else:
-                await self.agent.send(ev.room_id, "Rules I know: `@fixer rule min-age 60`, `@fixer rule install-scripts on|off`.")
+                await self.agent.send(ev.room_id, "Rules I know: @fixer rule min-age 60, @fixer rule install-scripts on/off.")
         else:
             r = self.policy.rules(ev.room_id)
             ok = self.policy.approvals(ev.room_id)
-            approved = ", ".join(f"`{k.split(':', 1)[1]}` ({v['by']})" for k, v in ok.items()) or "none yet"
+            seen: dict[str, str] = {}
+            for k, v in ok.items():
+                seen.setdefault(k.split(":", 1)[1], v["by"])
+            approved = ", ".join(f"`{n}` ({by})" for n, by in seen.items()) or "none yet"
             await self.agent.send(ev.room_id, (
                 "**This room's rules:**\n"
-                f"• packages younger than {r['min_age_days']} days need approval (`@fixer rule min-age N`)\n"
-                f"• install scripts need approval: {'yes' if r['block_install_scripts'] else 'no'} (`@fixer rule install-scripts on|off`)\n"
+                f"• packages younger than {r['min_age_days']} days need approval (say @fixer rule min-age N)\n"
+                f"• install scripts need approval: {'yes' if r['block_install_scripts'] else 'no'} (say @fixer rule install-scripts on/off)\n"
                 f"• approved here: {approved}\n"
-                "Approve with `approve <name>`; take back with `@fixer revoke <name>`."
+                "Approve with `approve <name>`; take back with @fixer revoke <name>."
             ))

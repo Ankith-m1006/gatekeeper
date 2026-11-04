@@ -17,7 +17,8 @@ ORDER = ["ok", "suspicious", "danger", "ghost"]
 
 
 def describe(r: registry.PackageReport, approval: dict | None = None) -> str:
-    head = f"{ICON[r.verdict]} **{r.name}** ({r.ecosystem})"
+    icon = "☑️" if approval and r.exists else ICON[r.verdict]
+    head = f"{icon} **{r.name}** ({r.ecosystem})"
     if r.verdict == "ghost":
         line = f"{head}: **does not exist**. Nobody should install this name: if anyone registers it later, it is a trap."
         if r.similar_to:
@@ -66,7 +67,7 @@ class Scout:
             "ghost": "Stop: this install includes a package that does not exist.",
             "danger": "Stop: this looks like a typosquat of a popular package.",
             "suspicious": "Check before installing:",
-            "ok": "These look fine:",
+            "ok": "Approved here, and the rest look fine:" if len(live) < len(reports) else "These look fine:",
         }[worst]
         body = f"**{title}**\n" + "\n".join(describe(r, approvals[key(r)]) for r in reports)
         await self.agent.send(ev.room_id, body)

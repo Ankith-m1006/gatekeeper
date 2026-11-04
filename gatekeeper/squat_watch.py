@@ -106,7 +106,7 @@ class SquatWatch:
         else:
             mine = [i for i in self.items.values() if ev.room_id in i["rooms"]]
             if not mine:
-                await self.agent.send(ev.room_id, "No invented names caught in this room yet. Add one with `@squat-watch npm:some-name`.")
+                await self.agent.send(ev.room_id, "No invented names caught in this room yet. Add one with @squat-watch npm:some-name.")
                 return
             mine.sort(key=lambda i: -i["seen"])
             rows = [f"{'🚨 registered ' + i['registered'] if i['registered'] else '👀'} **{i['name']}** ({i['eco']}), asked for {i['seen']}×, first {i['first']}" for i in mine[:15]]

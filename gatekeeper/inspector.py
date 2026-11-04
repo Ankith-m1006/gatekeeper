@@ -52,7 +52,7 @@ class Inspector:
             return
         m = ASK.search(ev.body)
         if not m:
-            await self.agent.send(ev.room_id, "Tell me what to read, like `@inspector npm:left-pad` or `@inspector pypi:requests`. I download the archive into memory and read it; I never install or run it.")
+            await self.agent.send(ev.room_id, "Tell me what to read, like @inspector npm:left-pad or @inspector pypi:requests. I download the archive into memory and read it; I never install or run it.")
             return
         eco = "npm" if m.group(1).lower() == "npm" else "pypi"
         res = await inspect(eco, m.group(2))
