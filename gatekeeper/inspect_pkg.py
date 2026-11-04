@@ -23,11 +23,12 @@ TEXT = (".js", ".cjs", ".mjs", ".ts", ".json", ".py", ".sh", ".bat", ".ps1", ".c
 
 # (severity, label, regex). severity: 3 = high, 2 = medium, 1 = low
 RULES: list[tuple[int, str, re.Pattern]] = [
-    (3, "reads SSH keys, npm tokens or cloud credentials", re.compile(r"\.ssh[/\\]id_|\.npmrc|\.pypirc|\.aws[/\\]credentials|\.docker[/\\]config\.json|\.kube[/\\]config", re.I)),
+    (2, "reads SSH keys, npm tokens or cloud credentials", re.compile(r"\.ssh[/\\]id_|\.npmrc|\.pypirc|\.aws[/\\]credentials|\.docker[/\\]config\.json|\.kube[/\\]config", re.I)),
     (3, "touches browser or crypto-wallet data", re.compile(r"Login Data|Local State|\.config[/\\](google-chrome|BraveSoftware)|Exodus|MetaMask|electrum|wallet\.dat", re.I)),
     (3, "sends data to a Discord or Telegram webhook", re.compile(r"discord(app)?\.com/api/webhooks|api\.telegram\.org/bot", re.I)),
     (3, "downloads something and runs it", re.compile(r"(curl|wget)[^\n|;]{0,200}\|\s*(ba)?sh|Invoke-WebRequest[^\n]{0,200}(iex|Invoke-Expression)|powershell[^\n]{0,80}-enc", re.I)),
     (2, "decodes a hidden base64 payload", re.compile(r"(atob|b64decode|Buffer\.from)\s*\(\s*['\"][A-Za-z0-9+/=]{120,}")),
+    (3, "decodes hidden code and runs it", re.compile(r"(exec|eval)\s*\(\s*(base64\.|b64decode|zlib\.|marshal\.|codecs\.decode|bytes\.fromhex|__import__\(['\"](base64|zlib|marshal)|Buffer\.from\([^)]{0,200}['\"](base64|hex)['\"])")),
     (2, "builds and runs code at runtime", re.compile(r"\beval\s*\(|new\s+Function\s*\(|\bexec\s*\(\s*(compile|base64|zlib|marshal)|marshal\.loads|__import__\(['\"]base64")),
     (2, "runs shell commands", re.compile(r"child_process|\bexecSync\s*\(|\bspawn\s*\(|subprocess\.(Popen|call|run|check_output)|os\.system\s*\(")),
     (2, "talks to a raw IP address", re.compile(r"https?://(?!127\.0\.0\.1|0\.0\.0\.0|localhost)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")),
@@ -164,9 +165,9 @@ def scan_text(path: str, text: str) -> list[Finding]:
 
 
 # Signals that are normal alone but tell a story together, in code that runs at install time.
-NET = re.compile(r"https?\.(get|request)\s*\(|fetch\s*\(|axios|requests\.(get|post|put)|urllib\.request|urlopen|http\.client|socket\.(socket|connect)|net\.(connect|Socket)|dns\.(lookup|resolve)|XMLHttpRequest")
+NET = re.compile(r"require\(\s*['\"](node:)?(https?|net|dns|tls|dgram)['\"]\s*\)|from\s+['\"](node:)?(https?|net|dns)['\"]|https?\.(get|request)\s*\(|fetch\s*\(|axios|requests\.(get|post|put)|urllib\.request|urlopen|http\.client|socket\.(socket|connect)|net\.(connect|Socket)|dns\.(lookup|resolve)|XMLHttpRequest")
 RECON = re.compile(r"os\.(hostname|userInfo|homedir)\s*\(|process\.env|os\.environ|os\.getenv|getpass|platform\.node|socket\.gethostname|os\.getlogin|whoami|os\.networkInterfaces")
-CATCHER = re.compile(r"oast\.(fun|me|pro|live|site|online)|interact\.sh|burpcollaborator|pipedream\.net|webhook\.site|requestbin|canarytokens|dnslog\.cn|ceye\.io|\.ngrok(-free)?\.(io|app)", re.I)
+CATCHER = re.compile(r"oast\.(fun|me|pro|live|site|online)|interact\.sh|burpcollaborator|pipedream\.net|webhook\.site|requestbin\.(com|net|io)|canarytokens\.(com|org)|dnslog\.cn|ceye\.io|\.ngrok(-free)?\.(io|app)", re.I)
 HIDDEN = re.compile(r"base64|b64decode|atob\s*\(|zlib\.decompress|marshal|\\x[0-9a-f]{2}", re.I)
 SETUP_HOOK = re.compile(r"class\s+\w+\s*\(\s*(install|develop|egg_info|_install|build_py)\s*\)|cmdclass\s*=\s*\{[^}]*['\"](install|develop|egg_info)['\"]")
 
@@ -198,6 +199,9 @@ def _combos(res: Inspection, files: list[tuple[str, str]], hook_files: set[str])
             if NET.search(text) or HIDDEN.search(text) or re.search(r"subprocess|os\.system|exec\s*\(", text):
                 add(3, "setup.py replaces the install step with its own code", path, text, hm)
         net, recon = NET.search(text), RECON.search(text)
+        cred = RULES[0][2].search(text)
+        if cred and net and (install_time or import_time):
+            add(3, "reads credentials and sends them out", path, text, cred)
         if install_time and net and recon:
             add(3, "sends machine or user details out during install", path, text, net)
         elif install_time and net:
