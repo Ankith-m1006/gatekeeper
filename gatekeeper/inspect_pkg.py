@@ -29,7 +29,7 @@ RULES: list[tuple[int, str, re.Pattern]] = [
     (3, "sends data to a Discord or Telegram webhook", re.compile(r"discord(app)?\.com/api/webhooks|api\.telegram\.org/bot", re.I)),
     (3, "downloads something and runs it", re.compile(r"(curl|wget)[^\n|;]{0,200}\|\s*(ba)?sh|Invoke-WebRequest[^\n]{0,200}(iex|Invoke-Expression)|powershell[^\n]{0,80}-enc", re.I)),
     (2, "decodes a hidden base64 payload", re.compile(r"(atob|b64decode|Buffer\.from)\s*\(\s*['\"][A-Za-z0-9+/=]{120,}")),
-    (3, "decodes hidden code and runs it", re.compile(r"(exec|eval)\s*\(\s*(base64\.|b64decode|zlib\.|marshal\.|codecs\.decode|bytes\.fromhex|__import__\(['\"](base64|zlib|marshal)|Buffer\.from\([^)]{0,200}['\"](base64|hex)['\"])")),
+    (3, "decodes hidden code and runs it", re.compile(r"\b(exec|eval)\s*\(\s*(base64\.|b64decode|zlib\.|marshal\.|codecs\.decode|bytes\.fromhex|__import__\(['\"](base64|zlib|marshal)|Buffer\.from\([^)]{0,200}['\"](base64|hex)['\"])")),
     (2, "builds and runs code at runtime", re.compile(r"\beval\s*\(|new\s+Function\s*\(|\bexec\s*\(\s*(compile|base64|zlib|marshal)|marshal\.loads|__import__\(['\"]base64")),
     (2, "runs shell commands", re.compile(r"child_process|\bexecSync\s*\(|\bspawn\s*\(|subprocess\.(Popen|call|run|check_output)|os\.system\s*\(")),
     (2, "talks to a raw IP address", re.compile(r"https?://(?!127\.0\.0\.1|0\.0\.0\.0|localhost)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")),
@@ -167,8 +167,8 @@ def scan_text(path: str, text: str) -> list[Finding]:
 
 
 # Signals that are normal alone but tell a story together, in code that runs at install time.
-NET = re.compile(r"require\(\s*['\"](node:)?(https?|net|dns|tls|dgram)['\"]\s*\)|from\s+['\"](node:)?(https?|net|dns)['\"]|https?\.(get|request)\s*\(|fetch\s*\(|axios|requests\.(get|post|put)|urllib\.request|urlopen|http\.client|socket\.(socket|connect)|net\.(connect|Socket)|dns\.(lookup|resolve)|XMLHttpRequest")
-RECON = re.compile(r"os\.(hostname|userInfo|homedir)\s*\(|process\.env|os\.environ|os\.getenv|getpass|platform\.node|socket\.gethostname|os\.getlogin|whoami|os\.networkInterfaces")
+NET = re.compile(r"require\(\s*['\"](node:)?(https?|net|dns|tls|dgram)['\"]\s*\)|from\s+['\"](node:)?(https?|net|dns)['\"]|https?\.(get|request)\s*\(|\bfetch\s*\(|axios|requests\.(get|post|put)|urllib\.request|urlopen|http\.client|socket\.(socket|connect)|net\.(connect|Socket)|dns\.(lookup|resolve)|XMLHttpRequest")
+RECON = re.compile(r"os\.(hostname|userInfo|homedir)\s*\(|process\.env\b|os\.environ|os\.getenv|getpass|platform\.node|socket\.gethostname|os\.getlogin|whoami|os\.networkInterfaces")
 CATCHER = re.compile(r"oast\.(fun|me|pro|live|site|online)|interact\.sh|burpcollaborator|pipedream\.net|webhook\.site|requestbin\.(com|net|io)|canarytokens\.(com|org)|dnslog\.cn|ceye\.io|\.ngrok(-free)?\.(io|app)", re.I)
 HIDDEN = re.compile(r"base64|b64decode|atob\s*\(|zlib\.decompress|marshal|\\x[0-9a-f]{2}", re.I)
 SETUP_HOOK = re.compile(r"class\s+\w+\s*\(\s*(install|develop|egg_info|_install|build_py)\s*\)|cmdclass\s*=\s*\{[^}]*['\"](install|develop|egg_info)['\"]")
