@@ -168,7 +168,8 @@ class Scout:
                 parts.insert(0, f"• Inspector, read the script {url}")
             await self.agent.hand_off(ev.room_id, names, f"Over to the crew ({who}'s message):\n" + NL.join(parts))
             said = True
-        return said
+        # Already warned about (an agent quoting it back) still counts as handled: no help text.
+        return said or bool(secrets or cmds)
 
     async def check_files(self, ev: Event, files: list[dict]) -> None:
         """A dependency file dropped into the chat: read it through Switch's media store and check what it declares."""

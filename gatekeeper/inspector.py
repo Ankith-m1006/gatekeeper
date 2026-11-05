@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 
 from .agent_guard import agent_instructions, hidden_text, is_code_file, is_instruction_file
 from .crew import CREW, my_part, tokens
@@ -39,6 +40,7 @@ def render(res: Inspection) -> str:
 class Inspector:
     def __init__(self, agent: Agent):
         self.agent = agent
+        self._read: dict[tuple[str, str], float] = {}  # (room, script url) -> when it was reported
 
     async def read_and_report(self, room_id: str, targets: list[tuple[str, str]], why: str = "") -> None:
         results = await asyncio.gather(*(inspect(e, n) for e, n in targets[:4]))
@@ -47,6 +49,10 @@ class Inspector:
 
     async def report_script(self, room_id: str, url: str) -> None:
         """Read an install script from its link, as text, without running it."""
+        now = time.time()
+        if now - self._read.get((room_id, url), 0) < 300:  # already reported in this room
+            return
+        self._read[(room_id, url)] = now
         res = await read_script(url)
         if res.error:
             await self.agent.send(room_id, f"❔ I couldn't read the script at <{url}> ({res.error}). Don't run what nobody can read.")
