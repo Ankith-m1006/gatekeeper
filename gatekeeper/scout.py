@@ -126,7 +126,9 @@ class Scout:
             if ev.addressed and not files and not guarded:
                 await self.agent.send(ev.room_id, "I check every package and MCP server your team or its coding agents are about to add, and I watch the room for leaked keys and dangerous commands. Paste an `npm install`, `pip install` or `claude mcp add` line, or drop a `package.json`, `requirements.txt` or `mcp.json`, and I'll check it live.")
             return
-        if self.repeat(ev, pkgs[:8]):
+        # A repeat only counts while the room's approvals are unchanged: after `approve x`, asking again shows it approved.
+        approved = tuple(sorted((await self.room_ledger(ev.room_id)).get("approved", {})))
+        if self.repeat(ev, pkgs[:8] + [("approvals", str(hash(approved)))]):
             log.info("scout: %s repeated the same install within 5 min, not re-checking", ev.sender)
             return
         install = install_commands(ev.body) or install_lines(pkgs[:8])
