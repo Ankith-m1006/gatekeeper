@@ -287,3 +287,55 @@ async def inspect(eco: str, name: str) -> Inspection:
     except Exception as e:  # report, never crash the agent
         res.error = str(e)[:200]
         return res
+
+
+# Normal for any installer, so they don't count against a script on their own.
+INSTALLER_NORMAL = {"downloads something and runs it", "runs shell commands", "fingerprints the machine", "talks to a raw IP address"}
+MAX_SCRIPT = 1024 * 1024
+
+
+async def read_script(url: str) -> Inspection:
+    """Download an install script as text (never run it) and read it like install-time code."""
+    res = Inspection("script", url.split("?", 1)[0][-80:])
+    if not url.lower().startswith(("https://", "http://")):
+        res.error = "only http(s) links can be read"
+        return res
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
+            async with c.stream("GET", url, headers=UA) as r:
+                r.raise_for_status()
+                buf = bytearray()
+                async for chunk in r.aiter_bytes():
+                    buf += chunk
+                    if len(buf) > MAX_SCRIPT:
+                        raise ValueError("script is larger than 1 MB, not reading it")
+        text = bytes(buf).decode("utf-8", "replace")
+    except Exception as e:
+        res.error = str(e)[:160]
+        return res
+    res.files_read = 1
+    res.findings = script_findings(text)
+    return res
+
+
+SENDS = re.compile(r"(curl|wget)\b[^\n]*(-d\b|--data|-F\b|--upload-file|-T\b|--post)|\bnc\s+-?\w*\s*[\w.-]+\s+\d+|/dev/tcp/", re.I)
+
+
+def script_findings(text: str) -> list[Finding]:
+    """What an install script would do if piped to a shell. Downloading and running tools is normal
+    for an installer; reading keys, sending data out and hiding instructions are not."""
+    out: list[Finding] = []
+    for f in scan_text("install.sh", text) + agent_text("install.sh", text):
+        if f.label in INSTALLER_NORMAL:
+            f.severity = 1
+        f.autorun = True  # whatever is in it runs the moment someone pipes it to a shell
+        out.append(f)
+    if m := CATCHER.search(text):
+        out.append(Finding(3, "sends data to a known data-collection service", "install.sh", text.count("\n", 0, m.start()) + 1, "", True))
+    cred, send = RULES[0][2].search(text), SENDS.search(text)
+    if cred and send:
+        out.append(Finding(3, "reads your keys and sends them out", "install.sh", text.count("\n", 0, send.start()) + 1, "", True))
+    best: dict[str, Finding] = {}
+    for f in sorted(out, key=lambda f: -f.severity):
+        best.setdefault(f.label, f)
+    return list(best.values())

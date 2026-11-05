@@ -6,7 +6,7 @@ import re
 
 from .agent_guard import agent_instructions, hidden_text, is_code_file, is_instruction_file
 from .crew import CREW, my_part, tokens
-from .inspect_pkg import Inspection, inspect, scan_text
+from .inspect_pkg import Inspection, inspect, read_script, scan_text
 from .switch import Agent, Event
 
 ICON = {"malicious-looking": "🚨", "risky": "🟠", "clean": "🟢", "unknown": "❔"}
@@ -16,7 +16,8 @@ SAY = {
     "clean": "I read the code and found nothing that steals, downloads or hides anything.",
     "unknown": "I could not read this package",
 }
-ASK = re.compile(r"(?:inspect\s+)?(npm|pypi|pip)[:\s]+(@?[\w./-]+)", re.I)
+ASK = re.compile(r"(?:\binspect\s+(npm|pypi|pip)\s+|\b(npm|pypi|pip):)(@?[\w./-]+)", re.I)
+URL = re.compile(r"https?://[^\s`'\"<>|)]+")
 
 
 def render(res: Inspection) -> str:
@@ -43,6 +44,22 @@ class Inspector:
         results = await asyncio.gather(*(inspect(e, n) for e, n in targets[:4]))
         head = "**I opened the package and read the code" + (f" ({why})" if why else "") + ":**\n"
         await self.agent.send(room_id, head + "\n".join(render(x) for x in results))
+
+    async def report_script(self, room_id: str, url: str) -> None:
+        """Read an install script from its link, as text, without running it."""
+        res = await read_script(url)
+        if res.error:
+            await self.agent.send(room_id, f"❔ I couldn't read the script at <{url}> ({res.error}). Don't run what nobody can read.")
+            return
+        v = res.verdict
+        say = {"malicious-looking": "this script does things an installer should not. Do not run it.",
+               "risky": "nothing clearly malicious, but read these lines before anyone runs it.",
+               "clean": "it installs and nothing more: no keys read, no data sent out, nothing hidden."}[v]
+        out = [f"{ICON[v]} **Install script** <{url}>: I downloaded it as text and ran nothing. {say}"]
+        for f in sorted(res.findings, key=lambda f: -f.severity)[:5]:
+            if f.severity >= 2:
+                out.append(f"   ↳ {f.label} (line {f.line})")
+        await self.agent.send(room_id, "\n".join(out))
 
     async def read_file(self, ev: Event, a: dict) -> None:
         """An agent rules file, MCP config or code file dropped into the room: read what the agent would read."""
@@ -99,16 +116,22 @@ class Inspector:
             return
         if sender in ("scout", "squat-watch"):  # a teammate handed work over through Switch
             part = my_part(ev.body, "inspector")
+            if part and "read the script" in part and (u := URL.search(part)):
+                await self.report_script(ev.room_id, u.group(0))
+                return
             if part and (targets := tokens(part)):
                 why = "just registered" if sender == "squat-watch" else ("an MCP server, tool descriptions included" if "MCP server" in part else "")
                 await self.read_and_report(ev.room_id, targets, why)
             return
         if sender in CREW:
             return
+        if re.search(r"\bscript\b|install\.sh|\.sh\b", ev.body, re.I) and (u := URL.search(ev.body)):
+            await self.report_script(ev.room_id, u.group(0))
+            return
         m = ASK.search(ev.body)
         if not m:
             await self.agent.send(ev.room_id, "Tell me what to read, like @inspector npm:left-pad or @inspector pypi:requests. I download the archive into memory and read it; I never install or run it.")
             return
-        eco = "npm" if m.group(1).lower() == "npm" else "pypi"
-        res = await inspect(eco, m.group(2))
+        eco = "npm" if (m.group(1) or m.group(2)).lower() == "npm" else "pypi"
+        res = await inspect(eco, m.group(3))
         await self.agent.send(ev.room_id, render(res))

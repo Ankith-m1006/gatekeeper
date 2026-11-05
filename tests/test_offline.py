@@ -290,3 +290,19 @@ def test_mcp_lookalikes():
     from gatekeeper.registry import lookalike
     assert lookalike("npm", "@modelcontextprotcol/server-filesystem") == "@modelcontextprotocol/server-filesystem"
     assert lookalike("pypi", "mcp-sever-fetch") == "mcp-server-fetch"
+
+
+def test_install_script_reading():
+    from pathlib import Path
+    from gatekeeper.inspect_pkg import Inspection, script_findings
+    bad = Inspection("script", "install.sh", findings=script_findings((Path(__file__).parent.parent / "demo" / "install.sh").read_text()))
+    assert bad.verdict == "malicious-looking"
+    assert any(f.label == "reads your keys and sends them out" for f in bad.findings)
+    rustup_like = 'set -e\ncurl -sSf https://static.rust-lang.org/rustup/dist/x86_64/rustup-init -o /tmp/r\nchmod +x /tmp/r\n/tmp/r -y\n'
+    assert Inspection("script", "ok.sh", findings=script_findings(rustup_like)).verdict == "clean"
+
+
+def test_inspector_ask_ignores_prose():
+    from gatekeeper.inspector import ASK
+    assert ASK.search("it isn't an npm or pip line") is None
+    assert ASK.search("@inspector npm:left-pad").group(3) == "left-pad"

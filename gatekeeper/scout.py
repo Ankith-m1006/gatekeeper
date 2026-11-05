@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import logging
 import time
 
@@ -77,11 +78,14 @@ class Scout:
         self._agents[room_id] = (time.time(), names)
         return names
 
-    def repeat(self, ev: Event, pkgs: list[tuple[str, str]]) -> bool:
-        """True when the same sender asked about the same packages in the last 5 minutes (a coding agent restating its plan)."""
+    def repeat(self, ev: Event, pkgs: list[tuple[str, str]], anyone: bool = False) -> bool:
+        """True when the same packages came up in the last 5 minutes (a coding agent restating its plan).
+
+        `anyone`: a warning (leaked key, dangerous command) is said once per room, whoever repeats it.
+        """
         now = time.time()
         self._recent = {k: t for k, t in self._recent.items() if now - t < 300}
-        k = (ev.room_id, ev.sender.lower(), tuple(sorted(pkgs)))
+        k = (ev.room_id, "" if anyone else ev.sender.lower(), tuple(sorted(pkgs)))
         if k in self._recent:
             return True
         self._recent[k] = now
@@ -142,7 +146,7 @@ class Scout:
         said = False
         who = ev.sender or "someone"
         secrets = find_secrets(ev.body)
-        if secrets and not self.repeat(ev, [("secret", v) for _, v in secrets]):
+        if secrets and not self.repeat(ev, [("secret", v) for _, v in secrets], anyone=True):
             kinds = ", ".join(f"{k} (`{v}`)" for k, v in secrets[:4])
             await self.reply(ev, (
                 f"🔑 **A secret just landed in the room** ({who}): {kinds}.\n"
@@ -151,13 +155,18 @@ class Scout:
             await self.agent.hand_off(ev.room_id, ["fixer"], f"Over to the crew ({who}'s message):\n• Fixer, log: {', '.join(k for k, _ in secrets[:4])} posted in chat, rotation advised")
             said = True
         cmds = dangerous_commands(ev.body)
-        if cmds and not self.repeat(ev, [("cmd", c) for _, _, c in cmds]):
+        if cmds and not self.repeat(ev, [("cmd", " ".join(c.split()).lower()) for _, _, c in cmds], anyone=True):
             lines = [f"🛑 **Hold on before running this** ({who}):"]
             for label, safer, cmd in cmds[:3]:
                 lines.append(f"   ↳ `{cmd[:110]}` {label}. Safer: {safer}.")
             lines.append("   ↳ Coding agents: don't run it until a person here says go.")
             await self.reply(ev, NL.join(lines))
-            await self.agent.hand_off(ev.room_id, ["fixer"], f"Over to the crew ({who}'s message):\n• Fixer, log: dangerous command held ({cmds[0][0]})")
+            names, parts = ["fixer"], [f"• Fixer, log: dangerous command held ({cmds[0][0]})"]
+            url = next((m.group(0) for _, _, c in cmds if (m := re.search(r"https?://[^\s`'\"<>|)]+", c))), None)
+            if url and cmds[0][0].startswith("downloads a script"):
+                names.insert(0, "inspector")
+                parts.insert(0, f"• Inspector, read the script {url}")
+            await self.agent.hand_off(ev.room_id, names, f"Over to the crew ({who}'s message):\n" + NL.join(parts))
             said = True
         return said
 
