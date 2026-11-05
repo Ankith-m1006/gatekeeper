@@ -14,12 +14,13 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from .agent_guard import agent_instructions, hidden_text
 from .registry import UA
 
 MAX_ARCHIVE = 25 * 1024 * 1024     # bytes downloaded
 MAX_FILE = 2 * 1024 * 1024          # bytes read per file
 MAX_TOTAL = 40 * 1024 * 1024        # bytes read across the archive (zip bomb guard)
-TEXT = (".js", ".cjs", ".mjs", ".ts", ".json", ".py", ".sh", ".bat", ".ps1", ".cfg", ".toml", ".txt")
+TEXT = (".js", ".cjs", ".mjs", ".ts", ".json", ".py", ".sh", ".bat", ".ps1", ".cfg", ".toml", ".txt", ".md")
 
 # (severity, label, regex). severity: 3 = high, 2 = medium, 1 = low
 RULES: list[tuple[int, str, re.Pattern]] = [
@@ -212,6 +213,28 @@ def _combos(res: Inspection, files: list[tuple[str, str]], hook_files: set[str])
             add(3, "hides code that phones home on import", path, text, net)
 
 
+def agent_text(path: str, text: str) -> list[Finding]:
+    """Text in a package that targets the AI agent using it, e.g. an MCP tool description.
+
+    Invisible Tags-block text has no honest use, so it always counts. Plain-sight instructions count
+    only when two different kinds appear in one file, which keeps normal docs (".env" in dotenv's
+    README) from tripping it.
+    """
+    out: list[Finding] = []
+    short = path.split("/", 1)[-1]
+    h = hidden_text(text)
+    if h.tags:
+        said = (" (hidden text: \"" + h.decoded[0][:80] + "\")") if h.decoded else ""
+        out.append(Finding(3, "hides invisible instructions for AI agents" + said, short, h.lines[0] if h.lines else 1, "", False))
+    elif h.bidi and not path.lower().endswith(".md"):
+        out.append(Finding(2, "uses invisible direction characters in code (Trojan Source)", short, h.lines[0] if h.lines else 1, "", False))
+    hits = agent_instructions(text)
+    if len({label for label, _, _ in hits}) >= 2:
+        label, line, snip = hits[0]
+        out.append(Finding(3, "tells AI agents to act behind the user's back (" + ", ".join(sorted({l for l, _, _ in hits}))[:120] + ")", short, line, snip, False))
+    return out
+
+
 def analyze(res: Inspection, members) -> Inspection:
     """Scan (path, text) pairs into `res`. Shared by the live agent and the eval."""
     files = list(members)
@@ -229,7 +252,9 @@ def analyze(res: Inspection, members) -> Inspection:
                     res.findings += scan_text("package.json (install hook)", cmd)
             except (ValueError, AttributeError):
                 pass
-        res.findings += scan_text(path, text)
+        res.findings += agent_text(path, text)
+        if not path.lower().endswith(".md"):  # docs are read only for agent-directed text
+            res.findings += scan_text(path, text)
     hooks = _hook_targets(res.install_scripts)
     _combos(res, files, hooks)
     # A shell script or build config in the archive only matters if an install hook runs it.

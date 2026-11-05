@@ -11,6 +11,7 @@ import logging
 import re
 
 from . import registry
+from .agent_guard import clean_lines
 from .crew import CREW, LEDGER, RoomPolicy, asker_of, ledger_text, my_part
 from .extract import INSTALL_LINE, packages_in
 from .switch import Agent, Event
@@ -19,6 +20,8 @@ log = logging.getLogger(__name__)
 APPROVE = re.compile(r"^\s*(?:@?fixer\s+)?approve\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
 REVOKE = re.compile(r"revoke\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
 RULE = re.compile(r"rule\s+(min-age|install-scripts)\s+(\S+)", re.I)
+CLEAN = re.compile(r"Fixer, clean `([^`]+)` (mxc://\S+)")
+LOG = re.compile(r"Fixer, log: (.+)")
 
 
 def rewrite(text: str, swaps: dict[str, str | None]) -> list[str]:
@@ -43,7 +46,7 @@ class Fixer:
     async def sync_ledger(self, room_id: str) -> None:
         """Write this room's rules and approvals into the Switch room document."""
         room = self.policy._room(room_id)
-        text = ledger_text({k: v for k, v in room.items() if k in ("rules", "approved")})
+        text = ledger_text({k: v for k, v in room.items() if k in ("rules", "approved", "incidents")})
         if room.get("doc_id") and room.get("doc_text") == text:
             return  # nothing changed; don't post an "updated" notice into the room
         try:
@@ -56,9 +59,31 @@ class Fixer:
         except Exception as e:
             log.warning("fixer could not write the ledger: %s", e)
 
+    async def clean_file(self, ev: Event, name: str, mxc: str) -> None:
+        """Post the file without its invisible characters or the lines that turn the agent against its user."""
+        try:
+            text = (await self.agent.download(ev.room_id, mxc)).decode("utf-8", "replace")
+        except Exception as e:
+            await self.agent.send(ev.room_id, f"I couldn't open `{name}` to clean it ({e}).")
+            return
+        cleaned, dropped = clean_lines(text)
+        self.policy.log_incident(ev.room_id, f"hidden or hostile agent instructions in {name}, {dropped} line(s) removed", asker_of(ev.body))
+        await self.sync_ledger(ev.room_id)
+        body = cleaned if len(cleaned) <= 1500 else cleaned[:1500] + "\n…"
+        await self.agent.send(ev.room_id, (
+            f"🔧 **Clean `{name}`**: invisible characters stripped, {dropped} line{'s' if dropped != 1 else ''} that told the agent to work against you removed. "
+            f"Use this copy; logged in the \"{LEDGER}\".\n```\n{body}\n```"))
+
     async def on_handoff(self, ev: Event) -> None:
         part = my_part(ev.body, "fixer")
         if not part:
+            return
+        if m := CLEAN.search(part):
+            await self.clean_file(ev, m.group(1), m.group(2))
+            return
+        if m := LOG.search(part):
+            self.policy.log_incident(ev.room_id, m.group(1).strip(), asker_of(ev.body))
+            await self.sync_ledger(ev.room_id)
             return
         pkgs = packages_in(part)
         reports = await asyncio.gather(*(registry.check(e, n) for e, n in pkgs[:8]))
@@ -94,8 +119,9 @@ class Fixer:
             return
         r = self.policy.rules(ev.room_id)
         await self.agent.send(ev.room_id, (
-            f"👋 Welcome, {who}. This room has a security crew: Scout checks every `npm`/`pip` install line you or your coding agents paste, "
-            f"Inspector reads risky code, Squat Watch tracks names agents invent, and I keep the rules. "
+            f"👋 Welcome, {who}. This room has a security crew for people and their coding agents. Scout checks every package and MCP server before it's added, "
+            f"and speaks up on leaked keys and dangerous commands. Inspector reads risky code, MCP tool descriptions and agent rules files "
+            f"(including text you can't see). Squat Watch tracks names agents invent, and I keep the rules and hand you safe versions. "
             f"Here, packages younger than {r['min_age_days']} days need a person's approval. The full rules are in the room document \"{LEDGER}\"."))
 
     async def on_event(self, ev: Event) -> None:
@@ -104,7 +130,7 @@ class Fixer:
             return
         if ev.type != "message" or not ev.body:
             return
-        if ev.sender.lower() == "scout" and ev.addressed:
+        if ev.sender.lower() in ("scout", "inspector") and ev.addressed:
             await self.on_handoff(ev)
             return
         if ev.sender.lower() in CREW:

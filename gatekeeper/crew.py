@@ -63,6 +63,13 @@ class RoomPolicy:
     def approvals(self, room_id: str) -> dict:
         return self._room(room_id)["approved"]
 
+    def log_incident(self, room_id: str, what: str, who: str) -> None:
+        """Record something the crew caught (a leaked key, a hidden instruction, a dangerous command)."""
+        inc = self._room(room_id).setdefault("incidents", [])
+        inc.append({"at": time.strftime("%d %b %H:%M"), "what": what[:160], "who": who[:60]})
+        del inc[:-50]
+        self.save()
+
 
 def key(r: PackageReport) -> str:
     return f"{r.ecosystem}:{r.name}"
@@ -102,7 +109,7 @@ def my_part(body: str, agent: str) -> str | None:
 
 
 def asker_of(body: str) -> str:
-    m = re.search(r"\((.+?)'s install\)", body)
+    m = re.search(r"\((.+?)'s (?:install|file|message)\)", body)
     return m.group(1) if m else "someone"
 
 
@@ -130,7 +137,11 @@ def ledger_text(room: dict) -> str:
         "## Approved packages",
     ]
     lines += [f"- {n}: approved by {v['by']} on {v['at']}" for n, v in seen.items()] or ["- none yet"]
-    lines += ["", "```json", json.dumps({"rules": r, "approved": room.get("approved", {})}), "```"]
+    incidents = room.get("incidents", [])
+    if incidents:
+        lines += ["", "## Caught in this room"]
+        lines += [f"- {i['at']}: {i['what']} ({i['who']})" for i in incidents[-20:]]
+    lines += ["", "```json", json.dumps({"rules": r, "approved": room.get("approved", {}), "incidents": incidents[-20:]}), "```"]
     return "\n".join(lines)
 
 

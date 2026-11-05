@@ -7,7 +7,13 @@ import time
 
 from . import registry
 from .crew import CREW, DEFAULT_RULES, LEDGER, RoomPolicy, handoff, key, parse_ledger
+from .agent_guard import MCP_ADD, dangerous_commands, find_secrets, mcp_packages_in_config
 from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file, install_commands
+
+
+def is_mcp_config(filename: str) -> bool:
+    f = filename.lower().rsplit("/", 1)[-1]
+    return f in ("mcp.json", ".mcp.json", "claude_desktop_config.json", "mcp_config.json")
 from .switch import Agent, Event
 
 log = logging.getLogger(__name__)
@@ -105,21 +111,55 @@ class Scout:
             return
         if ev.sender.lower() in CREW:  # never re-check the crew's own posts
             return
-        files = [a for a in (ev.payload.get("attachments") or []) if is_dep_file(str(a.get("filename", "")))]
+        files = [a for a in (ev.payload.get("attachments") or []) if is_dep_file(str(a.get("filename", ""))) or is_mcp_config(str(a.get("filename", "")))]
         if files:
             await self.check_files(ev, files)
         if not ev.body:
             return
+        guarded = await self.guard(ev)
         pkgs = packages_in(ev.body)
         if not pkgs:
-            if ev.addressed and not files:
-                await self.agent.send(ev.room_id, "I check every package your team or its coding agents are about to install. Paste an `npm install` or `pip install` line, drop a `package.json` or `requirements.txt`, or ask a coding agent for one, and I'll check it live.")
+            if ev.addressed and not files and not guarded:
+                await self.agent.send(ev.room_id, "I check every package and MCP server your team or its coding agents are about to add, and I watch the room for leaked keys and dangerous commands. Paste an `npm install`, `pip install` or `claude mcp add` line, or drop a `package.json`, `requirements.txt` or `mcp.json`, and I'll check it live.")
             return
         if self.repeat(ev, pkgs[:8]):
             log.info("scout: %s repeated the same install within 5 min, not re-checking", ev.sender)
             return
         install = install_commands(ev.body) or install_lines(pkgs[:8])
-        await self.check(ev, pkgs[:8], install, source=None)
+        mcp = bool(MCP_ADD.search(ev.body)) or any("mcp" in n.lower() for _, n in pkgs)
+        await self.check(ev, pkgs[:8], install, source=None, mcp=mcp)
+
+    async def reply(self, ev: Event, body: str) -> None:
+        """Answer in the room; when a coding agent is the one speaking, address it so its session acts on it."""
+        asker = ev.sender.lower()
+        if asker and asker not in CREW and asker in await self.room_agents(ev.room_id):
+            await self.agent.hand_off(ev.room_id, [ev.sender], body)
+        else:
+            await self.agent.send(ev.room_id, body)
+
+    async def guard(self, ev: Event) -> bool:
+        """Leaked keys and dangerous commands, from people or agents. Returns True if anything was said."""
+        said = False
+        who = ev.sender or "someone"
+        secrets = find_secrets(ev.body)
+        if secrets and not self.repeat(ev, [("secret", v) for _, v in secrets]):
+            kinds = ", ".join(f"{k} (`{v}`)" for k, v in secrets[:4])
+            await self.reply(ev, (
+                f"🔑 **A secret just landed in the room** ({who}): {kinds}.\n"
+                "   ↳ Everyone here, every bridged channel and every agent reading this room can now see it. "
+                "**Rotate it now**, then delete the message. Keep keys in `.env` and share them through a password manager, not chat."))
+            await self.agent.hand_off(ev.room_id, ["fixer"], f"Over to the crew ({who}'s message):\n• Fixer, log: {', '.join(k for k, _ in secrets[:4])} posted in chat, rotation advised")
+            said = True
+        cmds = dangerous_commands(ev.body)
+        if cmds and not self.repeat(ev, [("cmd", c) for _, _, c in cmds]):
+            lines = [f"🛑 **Hold on before running this** ({who}):"]
+            for label, safer, cmd in cmds[:3]:
+                lines.append(f"   ↳ `{cmd[:110]}` {label}. Safer: {safer}.")
+            lines.append("   ↳ Coding agents: don't run it until a person here says go.")
+            await self.reply(ev, NL.join(lines))
+            await self.agent.hand_off(ev.room_id, ["fixer"], f"Over to the crew ({who}'s message):\n• Fixer, log: dangerous command held ({cmds[0][0]})")
+            said = True
+        return said
 
     async def check_files(self, ev: Event, files: list[dict]) -> None:
         """A dependency file dropped into the chat: read it through Switch's media store and check what it declares."""
@@ -130,13 +170,15 @@ class Scout:
             except Exception as e:
                 await self.agent.send(ev.room_id, f"I couldn't read `{name}` ({e}).")
                 continue
-            pkgs = packages_in_file(name, text)
+            mcp = is_mcp_config(name)
+            pkgs = mcp_packages_in_config(text) if mcp else packages_in_file(name, text)
             if not pkgs:
-                await self.agent.send(ev.room_id, f"`{name}` doesn't declare any packages I can check.")
+                if not mcp:
+                    await self.agent.send(ev.room_id, f"`{name}` doesn't declare any packages I can check.")
                 continue
-            await self.check(ev, pkgs[:25], "", source=(name, len(pkgs)))
+            await self.check(ev, pkgs[:25], "", source=(name, len(pkgs)), mcp=mcp)
 
-    async def check(self, ev: Event, pkgs: list[tuple[str, str]], install: str, source: tuple[str, int] | None) -> None:
+    async def check(self, ev: Event, pkgs: list[tuple[str, str]], install: str, source: tuple[str, int] | None, mcp: bool = False) -> None:
         reports, ledger = await asyncio.gather(
             asyncio.gather(*(registry.check(e, n) for e, n in pkgs)),
             self.room_ledger(ev.room_id),
@@ -167,16 +209,19 @@ class Scout:
                 body += NL + f"✅ {fine} other{'s' if fine != 1 else ''} look fine."
         else:
             body = f"**{title}**" + NL + NL.join(describe(r, approvals[key(r)]) for r in reports)
-        asker = ev.sender.lower()
-        if asker and asker not in CREW and asker in await self.room_agents(ev.room_id):
-            # a coding agent asked: address the verdict to it, so its session wakes up and acts on it
-            await self.agent.hand_off(ev.room_id, [ev.sender], body)
-        else:
-            await self.agent.send(ev.room_id, body)
+        # An MCP server's tool descriptions become instructions the agent follows, so even a
+        # package that looks fine gets read before anyone plugs it in.
+        mcp_read = [key(r) for r in live if mcp and r.exists and r.verdict == "ok"][:4]
+        if mcp_read:
+            body += NL + "🔌 This adds an **MCP server**: every tool description in it becomes an instruction your agent follows. Inspector is reading them before anyone plugs it in."
+        await self.reply(ev, body)  # to a coding agent, addressed, so its session wakes up and acts on it
+        who = ev.sender or "someone"
         if worst == "ok":
+            if mcp_read:
+                await self.agent.hand_off(ev.room_id, ["inspector"], f"Over to the crew ({who}'s install):\n• Inspector, read " + ", ".join(f"`{k}`" for k in mcp_read) + " (MCP server: tool descriptions)")
             return
         # Hand the case to the crew through Switch, as one addressed message the team can read.
-        inspect = [key(r) for r in live if r.exists and r.verdict in ("danger", "suspicious")][:4]
+        inspect = ([key(r) for r in live if r.exists and r.verdict in ("danger", "suspicious")] + mcp_read)[:4]
         watch = [key(r) for r in live if r.verdict == "ghost"]
         if source:  # from a file, Fixer only needs the packages with problems
             install = install_lines([(r.ecosystem, r.name) for r in live if r.verdict != "ok"])

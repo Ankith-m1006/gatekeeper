@@ -2999,3 +2999,13 @@ chispa
 jinja2-ansible-filters
 opentelemetry-instrumentation-ollama
 composio
+# widely used MCP servers and SDKs (added 5 Nov 2026, each checked live on PyPI)
+mcp
+fastmcp
+mcp-server-fetch
+mcp-server-git
+mcp-server-time
+mcp-server-sqlite
+mcp-server-qdrant
+awslabs-core-mcp-server
+mcp-proxy
