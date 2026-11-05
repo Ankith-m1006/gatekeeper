@@ -90,7 +90,7 @@ AGENT_RULES: list[tuple[str, re.Pattern]] = [
     ("asks the agent to read secrets or keys", re.compile(r"\b(read|open|cat|load|include|pass|send|attach|copy)\b[^.\n]{0,60}(~/\.ssh|id_rsa|id_ed25519|\.env\b|\.npmrc|\.aws/credentials|\.netrc|private key|api[_ ]?keys?|access tokens?)", re.I)),
     ("asks the agent to send data somewhere", re.compile(r"\b(send|post|upload|exfiltrate|forward|transmit)\b[^.\n]{0,60}\b(to|at)\s+(https?://|[\w-]+\.(?:com|net|io|xyz|site|app|dev)\b)", re.I)),
     ("tells the agent to download and run code", re.compile(r"(curl|wget)[^\n|;]{0,200}\|\s*(ba|z)?sh\b|Invoke-WebRequest[^\n]{0,200}(iex|Invoke-Expression)", re.I)),
-    ("hides an instruction block inside a tool description", re.compile(r"<\s*(IMPORTANT|SYSTEM|secret|hidden)\s*>", re.I)),
+    ("hides an instruction block inside a tool description", re.compile(r"<\s*(IMPORTANT|SYSTEM|SECRET|HIDDEN)\s*>")),  # upper case: AWS docs use HTML <important>
 ]
 
 
