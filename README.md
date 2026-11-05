@@ -131,6 +131,8 @@ We measured Inspector on **real malware** from Datadog's open [malicious softwar
 
 **PyPI:** of 196 held-out malicious packages, it flagged **84%** (70% outright). Of 470 popular packages, it wrongly called 1.5% malicious and asked for a human look on 8.3%.
 
+**The new agent checks (5 Nov).** Inspector now also reads package text for hidden Unicode instructions and for text that tells an AI agent to work against its user (the MCP tool-poisoning pattern). Re-running every popular package with those checks on, they fired on **0 of 987** popular packages, and false alarms overall stayed at 0.2% on npm and 1.6% on PyPI. Getting there took three fixes the eval found: emoji flags use the same invisible tag characters, AWS API docs use HTML `<important>` tags, and READMEs mention `.env` in normal prose. Details: [`eval/RESULTS-2026-11-05-popular-recheck.md`](eval/RESULTS-2026-11-05-popular-recheck.md).
+
 Full output: [`eval/RESULTS.md`](eval/RESULTS.md). Reproduce with `python -m eval.run_eval 200 500 500` (run it on a throwaway machine: the samples are real malware, read in memory only).
 
 **What these numbers do not include.** Inspector only reads code. In real use, Scout also flags a package that is days old, has one version and almost no downloads, which describes most fresh malware. That check cannot be replayed on packages the registries have already removed, so it is not counted above. Many npm samples we missed contain no code at all beyond a manifest, and only that metadata would catch them.
