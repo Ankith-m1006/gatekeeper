@@ -35,17 +35,29 @@ def _clean_py(tok: str) -> str | None:
     return tok if _PY_NAME.match(tok) else None
 
 
+# Words that end a package list when an install command sits inside a sentence. None of them is a
+# package anyone means to install.
+PROSE = {
+    "for", "to", "and", "then", "so", "because", "with", "in", "on", "from", "into", "if", "but", "or",
+    "the", "a", "an", "please", "first", "now", "here", "there", "it", "this", "that", "which", "when",
+    "after", "before", "as", "is", "are", "was", "will", "should", "would", "can", "could", "using", "via",
+}
+
+
 def packages_in(text: str) -> list[tuple[str, str]]:
     """Return [(ecosystem, name)] in the order they appear, without duplicates."""
     found: list[tuple[str, str]] = []
     for rx, eco, clean in ((_NPM, "npm", _clean_npm), (_PIP, "pypi", _clean_py)):
         for m in rx.finditer(text):
             for tok in m.group(1).split():
-                if tok in ("-r", "--requirement"):
-                    break
-                name = clean(tok)
+                if tok in ("-r", "--requirement") or tok.lower() in PROSE:
+                    break  # "pip install colorama for the CLI": the sentence starts again at "for"
+                bare = tok.rstrip(",.!?:)")
+                name = clean(bare)
                 if name and (eco, name) not in found:
                     found.append((eco, name))
+                if bare != tok:  # "npm i lodash, then ..." ends at the punctuation
+                    break
     return found
 
 

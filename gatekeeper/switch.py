@@ -5,6 +5,7 @@ Docs: https://docs.switchagents.ai/switch-rooms/internals/agent-protocol
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import uuid
@@ -16,6 +17,9 @@ import httpx
 import websockets
 
 log = logging.getLogger(__name__)
+
+# The thread of the event being handled (Slack/Discord threads); None means the main channel.
+THREAD: contextvars.ContextVar[str | None] = contextvars.ContextVar("thread", default=None)
 
 STATE_DIR = Path(__file__).resolve().parent.parent / "state"
 
@@ -127,7 +131,12 @@ class Agent:
         return r.json().get("result")
 
     async def send(self, room_id: str, text: str) -> Any:
-        """Post into a room without needing to switch this session's connected room."""
+        """Post into a room without needing to switch this session's connected room.
+
+        Inside a thread (a Slack or Discord thread the event came from), the reply goes into that thread.
+        """
+        if thread := THREAD.get():
+            return await self.in_room(room_id, "post_message", body=text, thread_id=thread)
         r = await self.http.post(f"/agents/{self.agent_id}/message", json={"room_id": room_id, "content": text})
         if r.status_code >= 400:
             raise RuntimeError(f"message -> {r.status_code}: {r.text[:300]}")
@@ -161,7 +170,7 @@ class Agent:
 
     async def hand_off(self, room_id: str, names: list[str], body: str) -> Any:
         """Address teammates through Switch: they get an addressed event, the room sees the handoff."""
-        return await self.in_room(room_id, "send_targeted_message", body=body, target_names=names)
+        return await self.in_room(room_id, "send_targeted_message", body=body, target_names=names, thread_id=THREAD.get())
 
     async def room_documents(self, room_id: str) -> list[dict]:
         async with self._room_lock:
@@ -238,6 +247,8 @@ class Agent:
             await asyncio.sleep(2)
 
     async def _safe(self, handler: Handler, ev: Event) -> None:
+        # Each event runs in its own task, so this is per event: replies to a threaded message stay in that thread.
+        THREAD.set(ev.payload.get("thread_id") or None)
         try:
             await handler(ev)
         except Exception:  # one bad event must never kill the agent
