@@ -54,6 +54,32 @@ class Scout:
     def __init__(self, agent: Agent, policy: RoomPolicy):
         self.agent, self.policy = agent, policy
         self._ledger: dict[str, tuple[float, dict]] = {}
+        self._agents: dict[str, tuple[float, set[str]]] = {}
+        self._recent: dict[tuple[str, str, tuple], float] = {}
+
+    async def room_agents(self, room_id: str) -> set[str]:
+        """Names of the agents in the room, so a coding agent's request gets an addressed answer it wakes up to."""
+        hit = self._agents.get(room_id)
+        if hit and time.time() - hit[0] < 60:
+            return hit[1]
+        names: set[str] = set()
+        try:
+            d = await self.agent.op("get_room_detail", _bind=False, room_id=room_id)
+            names = {str(n).lower() for n in (d or {}).get("agent_names") or []}
+        except Exception as e:
+            log.warning("scout could not list room agents: %s", e)
+        self._agents[room_id] = (time.time(), names)
+        return names
+
+    def repeat(self, ev: Event, pkgs: list[tuple[str, str]]) -> bool:
+        """True when the same sender asked about the same packages in the last 5 minutes (a coding agent restating its plan)."""
+        now = time.time()
+        self._recent = {k: t for k, t in self._recent.items() if now - t < 300}
+        k = (ev.room_id, ev.sender.lower(), tuple(sorted(pkgs)))
+        if k in self._recent:
+            return True
+        self._recent[k] = now
+        return False
 
     async def room_ledger(self, room_id: str) -> dict:
         """Rules and approvals from the ledger document Fixer keeps in the Switch room."""
@@ -88,6 +114,9 @@ class Scout:
         if not pkgs:
             if ev.addressed and not files:
                 await self.agent.send(ev.room_id, "I check every package your team or its coding agents are about to install. Paste an `npm install` or `pip install` line, drop a `package.json` or `requirements.txt`, or ask a coding agent for one, and I'll check it live.")
+            return
+        if self.repeat(ev, pkgs[:8]):
+            log.info("scout: %s repeated the same install within 5 min, not re-checking", ev.sender)
             return
         install = NL.join(m.group(0).strip().strip("`") for m in INSTALL_LINE.finditer(ev.body))
         await self.check(ev, pkgs[:8], install, source=None)
@@ -138,7 +167,12 @@ class Scout:
                 body += NL + f"✅ {fine} other{'s' if fine != 1 else ''} look fine."
         else:
             body = f"**{title}**" + NL + NL.join(describe(r, approvals[key(r)]) for r in reports)
-        await self.agent.send(ev.room_id, body)
+        asker = ev.sender.lower()
+        if asker and asker not in CREW and asker in await self.room_agents(ev.room_id):
+            # a coding agent asked: address the verdict to it, so its session wakes up and acts on it
+            await self.agent.hand_off(ev.room_id, [ev.sender], body)
+        else:
+            await self.agent.send(ev.room_id, body)
         if worst == "ok":
             return
         # Hand the case to the crew through Switch, as one addressed message the team can read.
