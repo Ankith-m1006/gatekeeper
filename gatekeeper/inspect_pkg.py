@@ -226,10 +226,14 @@ def agent_text(path: str, text: str) -> list[Finding]:
     if h.tags:
         said = (" (hidden text: \"" + h.decoded[0][:80] + "\")") if h.decoded else ""
         out.append(Finding(3, "hides invisible instructions for AI agents" + said, short, h.lines[0] if h.lines else 1, "", False))
-    elif h.bidi and not path.lower().endswith(".md"):
-        out.append(Finding(2, "uses invisible direction characters in code (Trojan Source)", short, h.lines[0] if h.lines else 1, "", False))
+    if path.lower().endswith(".md"):  # docs explain things like ".env" freely; only hidden text counts there
+        return out
     hits = agent_instructions(text)
-    if len({label for label, _, _ in hits}) >= 2:
+    kinds = {label for label, _, _ in hits}
+    # In code, an instruction to the agent needs a hiding signal ("don't tell the user", an <IMPORTANT>
+    # block) plus one more kind; the hiding is what separates an attack from a docstring.
+    hiding = {"tells the agent to hide what it does", "hides an instruction block inside a tool description"}
+    if len(kinds) >= 2 and kinds & hiding:
         label, line, snip = hits[0]
         out.append(Finding(3, "tells AI agents to act behind the user's back (" + ", ".join(sorted({l for l, _, _ in hits}))[:120] + ")", short, line, snip, False))
     return out

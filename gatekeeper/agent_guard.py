@@ -41,12 +41,21 @@ def hidden_text(text: str) -> Hidden:
     h = Hidden()
     run: list[str] = []
     line = 1
+    prev, in_flag = 0, False
     for ch in text:
         cp = ord(ch)
+        last, prev = prev, cp
         if ch == "\n":
             line += 1
         if cp in TAGS:
+            # Emoji subdivision flags (🏴 + tag letters + cancel tag, e.g. England) are normal text.
+            if in_flag or (not run and last == 0x1F3F4):
+                in_flag = cp != 0xE007F
+                continue
             h.tags += 1
+        else:
+            in_flag = False
+        if cp in TAGS:
             if 0xE0020 <= cp <= 0xE007E:
                 run.append(chr(cp - 0xE0000))
             if line not in h.lines:
@@ -76,7 +85,7 @@ def strip_hidden(text: str) -> str:
 # ---------------- 2. instructions aimed at the agent ----------------
 
 AGENT_RULES: list[tuple[str, re.Pattern]] = [
-    ("tells the agent to hide what it does", re.compile(r"\b(do not|don'?t|never)\s+(tell|mention|inform|show|reveal|alert|notify|log)\b[^.\n]{0,40}\b(user|human|developer|anyone|them)\b|without\s+(telling|asking|informing|notifying)\s+the\s+(user|human|developer)|\bsilently\b[^.\n]{0,60}\b(add|run|install|send|insert|include|execute)", re.I)),
+    ("tells the agent to hide what it does", re.compile(r"\b(do not|don'?t|never)\s+(tell|mention|inform|alert|notify)\b[^.\n]{0,40}\bthe\s+(user|human|developer)\b|without\s+(telling|asking|informing|notifying)\s+the\s+(user|human|developer)|\bsilently\b[^.\n]{0,60}\b(add|run|install|send|insert|include|execute)", re.I)),
     ("tries to override the agent's instructions", re.compile(r"\bignore\s+(all\s+|any\s+)?(the\s+)?(previous|prior|above|earlier|other)\s+(instructions|rules|prompts?)|\bdisregard\s+(all\s+|the\s+)?(previous|prior|above)\b|\byou\s+are\s+now\s+(a|an|in)\b|\bnew\s+system\s+prompt\b", re.I)),
     ("asks the agent to read secrets or keys", re.compile(r"\b(read|open|cat|load|include|pass|send|attach|copy)\b[^.\n]{0,60}(~/\.ssh|id_rsa|id_ed25519|\.env\b|\.npmrc|\.aws/credentials|\.netrc|private key|api[_ ]?keys?|access tokens?)", re.I)),
     ("asks the agent to send data somewhere", re.compile(r"\b(send|post|upload|exfiltrate|forward|transmit)\b[^.\n]{0,60}\b(to|at)\s+(https?://|[\w-]+\.(?:com|net|io|xyz|site|app|dev)\b)", re.I)),
