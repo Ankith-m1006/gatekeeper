@@ -92,7 +92,10 @@ def agent_instructions(text: str) -> list[tuple[str, int, str]]:
         m = rx.search(text)
         if m:
             line = text.count("\n", 0, m.start()) + 1
-            snip = text[max(0, m.start() - 20): m.end() + 40].replace("\n", " ").strip()
+            # the sentence around the match, on one line, cut at word edges
+            start = max(text.rfind(". ", 0, m.start()), text.rfind("\n\n", 0, m.start()), text.rfind(">", 0, m.start() - 1), m.start() - 80)
+            end = min([i for i in (text.find(". ", m.end()), text.find(".\n", m.end()), text.find("<", m.end()), m.end() + 80) if i >= 0])
+            snip = re.sub(r"\s+", " ", text[start + 1: end + 1]).strip(" \"'.")
             out.append((label, line, snip[:140]))
     return out
 

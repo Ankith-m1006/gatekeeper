@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 APPROVE = re.compile(r"^\s*(?:@?fixer\s+)?approve\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
 REVOKE = re.compile(r"revoke\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
 RULE = re.compile(r"rule\s+(min-age|install-scripts)\s+(\S+)", re.I)
-CLEAN = re.compile(r"Fixer, clean `([^`]+)` (mxc://\S+)")
+CLEAN = re.compile(r"Fixer, clean `([^`]+)` ([a-z][\w+.-]*://\S+)")
 LOG = re.compile(r"Fixer, log: (.+)")
 
 
