@@ -7,7 +7,7 @@ import time
 
 from . import registry
 from .crew import CREW, DEFAULT_RULES, LEDGER, RoomPolicy, handoff, key, parse_ledger
-from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file
+from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file, install_commands
 from .switch import Agent, Event
 
 log = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ class Scout:
         if self.repeat(ev, pkgs[:8]):
             log.info("scout: %s repeated the same install within 5 min, not re-checking", ev.sender)
             return
-        install = NL.join(m.group(0).strip().strip("`") for m in INSTALL_LINE.finditer(ev.body))
+        install = install_commands(ev.body) or install_lines(pkgs[:8])
         await self.check(ev, pkgs[:8], install, source=None)
 
     async def check_files(self, ev: Event, files: list[dict]) -> None:

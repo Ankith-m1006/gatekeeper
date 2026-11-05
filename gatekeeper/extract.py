@@ -99,3 +99,21 @@ def packages_in_file(filename: str, text: str) -> list[tuple[str, str]]:
             for name in re.findall(r"^\s*([A-Za-z0-9][\w.-]*)\s*=", table, re.M):
                 add("pypi", name)
     return found
+
+
+_COMMAND = re.compile(
+    r"\b(?:npm|yarn|pnpm|bun|npx|pip3?|uv|poetry|pipenv|python3?\s+-m\s+pip)\b[^`\n]*", re.I
+)
+_MENTION = re.compile(r"<@[&!]?\d+>|@[\w-]+")
+
+
+def install_commands(text: str) -> str:
+    """Just the install commands from a message, without mentions or the sentence around them."""
+    out = []
+    for m in INSTALL_LINE.finditer(_MENTION.sub("", text)):
+        c = _COMMAND.search(m.group(0))
+        if c:
+            cmd = re.split(r"(?<=\S)[.,;:!?)]\s|\s\(|\.\s*$", c.group(0).strip(), maxsplit=1)[0].strip().rstrip(".,;:")
+            if cmd and cmd not in out:
+                out.append(cmd)
+    return "\n".join(out)

@@ -195,3 +195,9 @@ def test_is_dep_file_and_install_lines():
     assert is_dep_file("app/requirements.txt") and is_dep_file("package.json") and not is_dep_file("README.md")
     assert install_lines([("npm", "expres"), ("pypi", "reqeusts"), ("npm", "lodahs")]) == "npm i expres lodahs\npip install reqeusts"
     assert rewrite(install_lines([("npm", "expres")]), {"expres": "express"}) == ["npm i express"]
+
+
+def test_install_commands_strip_mentions_and_prose():
+    from gatekeeper.extract import install_commands
+    assert install_commands("<@&1567764887231266936> Requested: `npm install libphonenumbr-js`. The name looks off") == "npm install libphonenumbr-js"
+    assert install_commands("@scout check pip install requests flask (run in /tmp)") == "pip install requests flask"
