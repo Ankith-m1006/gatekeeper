@@ -350,3 +350,21 @@ def test_approval_is_pinned_to_the_version():
     assert not approval_holds({"by": "a", "at": "x", "version": "1.0.0"}, rep)  # new release: check again
     assert approval_holds({"by": "a", "at": "x"}, rep)  # older ledgers without a version still count
     assert not approval_holds(None, rep)
+
+
+def test_exact_pins_and_lockfiles_need_their_own_approval():
+    from gatekeeper.crew import approval_holds
+    from gatekeeper.extract import pins_in, pins_in_file
+    from gatekeeper.fixer import APPROVE
+    from gatekeeper.registry import PackageReport
+    assert pins_in("npm i lodash@4.17.21 react@^18 && pip install requests==2.31.0 flask>=2") == {
+        ("npm", "lodash"): "4.17.21", ("pypi", "requests"): "2.31.0"}
+    assert pins_in_file("package-lock.json", '{"packages":{"":{},"node_modules/left-pad":{"version":"1.3.0"}}}') == {("npm", "left-pad"): "1.3.0"}
+    assert pins_in_file("requirements.txt", "requests==2.31.0\nflask>=2\n") == {("pypi", "requests"): "2.31.0"}
+    rep = PackageReport("npm", "lodash", True, latest="4.17.21")
+    ok = {"by": "a", "at": "x", "version": "4.17.21"}
+    assert approval_holds(ok, rep) and approval_holds(ok, rep, "4.17.21")
+    assert not approval_holds(ok, rep, "4.17.20")  # an older pinned version is a different thing to check
+    m = APPROVE.match("approve lodash@4.17.20")
+    assert m.group(2) == "lodash" and m.group(3) == "4.17.20"
+    assert APPROVE.match("approve @scope/pkg").group(2) == "@scope/pkg" and APPROVE.match("approve @scope/pkg").group(3) is None

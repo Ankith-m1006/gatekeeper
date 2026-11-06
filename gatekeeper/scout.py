@@ -9,7 +9,7 @@ import time
 from . import registry
 from .crew import approval_holds, CREW, DEFAULT_RULES, LEDGER, RoomPolicy, handoff, key, parse_ledger
 from .agent_guard import MCP_ADD, dangerous_commands, find_secrets, mcp_packages_in_config
-from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file, install_commands
+from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file, install_commands, pins_in, pins_in_file
 
 
 def is_mcp_config(filename: str) -> bool:
@@ -188,9 +188,11 @@ class Scout:
                 if not mcp:
                     await self.agent.send(ev.room_id, f"`{name}` doesn't declare any packages I can check.")
                 continue
-            await self.check(ev, pkgs[:25], "", source=(name, len(pkgs)), mcp=mcp)
+            await self.check(ev, pkgs[:25], "", source=(name, len(pkgs)), mcp=mcp, pins={} if mcp else pins_in_file(name, text))
 
-    async def check(self, ev: Event, pkgs: list[tuple[str, str]], install: str, source: tuple[str, int] | None, mcp: bool = False) -> None:
+    async def check(self, ev: Event, pkgs: list[tuple[str, str]], install: str, source: tuple[str, int] | None, mcp: bool = False,
+                    pins: dict[tuple[str, str], str] | None = None) -> None:
+        pins = pins if pins is not None else pins_in(install or ev.body)
         reports, ledger = await asyncio.gather(
             asyncio.gather(*(registry.check(e, n) for e, n in pkgs)),
             self.room_ledger(ev.room_id),
@@ -203,10 +205,13 @@ class Scout:
             if r.exists and age is not None and 30 <= age < limit:
                 r.flags.append(f"{age} days old (this room wants {limit}+)")
         raw = {key(r): ledger.get("approved", {}).get(key(r)) for r in reports}
-        approvals = {key(r): (raw[key(r)] if approval_holds(raw[key(r)], r) else None) for r in reports}
-        for r in reports:  # approved earlier, but this is a newer release: say so and check it again
+        wanted = {key(r): pins.get((r.ecosystem, r.name)) for r in reports}
+        approvals = {key(r): (raw[key(r)] if approval_holds(raw[key(r)], r, wanted[key(r)]) else None) for r in reports}
+        for r in reports:  # approved earlier, but for another version: say so and check it again
             if raw[key(r)] and not approvals[key(r)]:
-                r.flags.append(f"new release {r.latest}: the room approved {raw[key(r)].get('version')}, so this one is checked again")
+                asked = wanted[key(r)] or r.latest
+                why = "this install asks for" if wanted[key(r)] else "new release"
+                r.flags.append(f"{why} {asked}: the room approved {raw[key(r)].get('version')}, so this one is checked again")
         live = [r for r in reports if not approvals[key(r)]]
         worst = max((r.verdict for r in live), key=ORDER.index, default="ok")
         title = {

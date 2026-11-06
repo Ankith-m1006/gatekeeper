@@ -17,7 +17,7 @@ from .extract import INSTALL_LINE, packages_in
 from .switch import Agent, Event
 
 log = logging.getLogger(__name__)
-APPROVE = re.compile(r"^\s*(?:@?fixer\s+)?approve\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
+APPROVE = re.compile(r"^\s*(?:@?fixer\s+)?approve\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)(?:(?:@|==)v?(\d[\w.+-]*))?", re.I)
 REVOKE = re.compile(r"revoke\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
 RULE = re.compile(r"rule\s+(min-age|install-scripts)\s+(\S+)", re.I)
 CLEAN = re.compile(r"Fixer, clean `([^`]+)` ([a-z][\w+.-]*://\S+)")
@@ -141,11 +141,13 @@ class Fixer:
             name = m.group(2)
             ecos = [m.group(1).lower()] if m.group(1) else ["npm", "pypi"]
             for eco in ecos:
-                try:
-                    rep = await registry.check(eco, name)
-                    version = rep.latest if rep.exists else None
-                except Exception:
-                    version = None
+                version = m.group(3)  # `approve foo@1.2.0` approves exactly that version
+                if not version:
+                    try:
+                        rep = await registry.check(eco, name)
+                        version = rep.latest if rep.exists else None
+                    except Exception:
+                        version = None
                 self.policy.approve(ev.room_id, f"{eco}:{name}", ev.sender or "someone", version)
             await self.sync_ledger(ev.room_id)
             await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'} (this version only: a new release gets checked again), written in the \"{LEDGER}\" document. Scout will show it next time; say @fixer revoke {name} to take it back.")

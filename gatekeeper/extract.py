@@ -61,6 +61,71 @@ def packages_in(text: str) -> list[tuple[str, str]]:
     return found
 
 
+_EXACT = re.compile(r"^v?\d+(\.\d+){0,3}([-+.][0-9A-Za-z.-]+)?$")
+
+
+def _npm_pin(tok: str) -> str | None:
+    tok = tok.strip().strip("'\"").rstrip(",.!?:)")
+    at = tok.rfind("@")
+    if at <= 0:
+        return None
+    v = tok[at + 1:]
+    return v.lstrip("v") if _EXACT.match(v) else None
+
+
+def _py_pin(tok: str) -> str | None:
+    m = re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[^\]]*\])?\s*===?\s*([0-9][0-9A-Za-z.+!-]*)$", tok.strip().strip("'\""))
+    return m.group(1) if m else None
+
+
+def pins_in(text: str) -> dict[tuple[str, str], str]:
+    """Exact versions asked for in install commands: `npm i foo@1.2.0`, `pip install foo==1.2.0`.
+
+    Ranges (^1.2, >=1, ~=) are not pins: they resolve to the newest matching release.
+    """
+    pins: dict[tuple[str, str], str] = {}
+    for rx, eco, clean, pin in ((_NPM, "npm", _clean_npm, _npm_pin), (_PIP, "pypi", _clean_py, _py_pin)):
+        for m in rx.finditer(text):
+            for tok in m.group(1).split():
+                if tok in ("-r", "--requirement") or tok.lower() in PROSE:
+                    break
+                name, v = clean(tok.rstrip(",.!?:)")), pin(tok)
+                if name and v:
+                    pins[(eco, name)] = v
+    return pins
+
+
+def pins_in_file(filename: str, text: str) -> dict[tuple[str, str], str]:
+    """Exact versions a dependency file pins: package-lock.json resolved versions, `==` lines, exact package.json versions."""
+    import json
+
+    f = filename.lower().rsplit("/", 1)[-1]
+    pins: dict[tuple[str, str], str] = {}
+    if f in ("package.json", "package-lock.json"):
+        try:
+            d = json.loads(text)
+        except ValueError:
+            return pins
+        if f == "package-lock.json":
+            for path, meta in (d.get("packages") or {}).items():
+                if path.startswith("node_modules/") and isinstance(meta, dict) and meta.get("version"):
+                    name = path[len("node_modules/"):]
+                    if "/node_modules/" not in name:  # direct dependencies only
+                        pins[("npm", name.lower())] = str(meta["version"])
+            return pins
+        for section in ("dependencies", "devDependencies", "optionalDependencies"):
+            for name, spec in (d.get(section) or {}).items():
+                if isinstance(spec, str) and _EXACT.match(spec.strip()):
+                    pins[("npm", name.lower())] = spec.strip().lstrip("v")
+    elif f.startswith("requirements"):
+        for line in text.splitlines():
+            line = line.split("#", 1)[0].strip()
+            name, v = _clean_py(line), _py_pin(line)
+            if name and v:
+                pins[("pypi", name)] = v
+    return pins
+
+
 # ---------- dependency files dropped into the chat ----------
 DEP_FILES = ("package.json", "package-lock.json", "requirements", "pyproject.toml", "pipfile")
 

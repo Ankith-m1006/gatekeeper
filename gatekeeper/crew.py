@@ -76,12 +76,17 @@ def key(r: PackageReport) -> str:
     return f"{r.ecosystem}:{r.name}"
 
 
-def approval_holds(approval: dict | None, r: PackageReport) -> bool:
-    """An approval covers only the version it was given for. A newer release is a fresh thing to check."""
+def approval_holds(approval: dict | None, r: PackageReport, wanted: str | None = None) -> bool:
+    """An approval covers only the version it was given for.
+
+    `wanted` is the exact version the install or lockfile asks for (foo@1.2.0, foo==1.2.0); without a pin,
+    the install gets the newest release, so that is what has to match. Any other version is checked again.
+    """
     if not approval:
         return False
     v = approval.get("version")
-    return v is None or r.latest is None or v == r.latest
+    target = wanted or r.latest
+    return v is None or target is None or v == target
 
 
 # ---------------- handoffs through Switch ----------------

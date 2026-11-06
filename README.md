@@ -40,7 +40,7 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 **Squat Watch** guards the names that don't exist yet. It keeps this team's list of package names its agents invented, checks npm and PyPI every 5 minutes, and the moment one gets registered it alerts the room and hands the new package to Inspector. It counts how often a name comes back: a name your agents invent again and again is exactly the one an attacker will grab. It also learns the real packages your team installs and reads the npm and PyPI new-package feeds every 2 minutes, so a brand-new lookalike (say `expresss`) is flagged before anyone asks for it.
 
-**Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer writes who approved it, when, and **which version** into the room's **Gatekeeper ledger** (a Switch room document), and Scout reads that ledger before every check. An approval covers only that version: a new release is treated as a fresh package and checked again, code included. Each room has its own rules, and Fixer welcomes new people to the room with them.
+**Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer writes who approved it, when, and **which version** into the room's **Gatekeeper ledger** (a Switch room document), and Scout reads that ledger before every check. An approval covers exactly one version: a new release, an older pinned version (`foo@1.2.0`, `foo==1.2.0`) or a different version in a lockfile is a fresh package and is checked again, code included. `approve foo@1.2.0` approves that exact version. Each room has its own rules, and Fixer welcomes new people to the room with them.
 
 ## What it looks like
 
@@ -82,7 +82,7 @@ Everything works by plain chat. Mention an agent to talk to it directly.
 
 - Paste any install line, or a coding agent's answer that contains one. Scout checks it.
 - Drop a `package.json`, `package-lock.json`, `requirements.txt`, `pyproject.toml` or `Pipfile` into the chat. Scout reads it through Switch's media store and checks every dependency.
-- `approve <name>`: allow a risky package in this room (your name is recorded).
+- `approve <name>` or `approve <name>@<version>`: allow a risky package in this room for one version (your name and the version are recorded).
 - `@fixer rules`: show this room's rules and approvals.
 - `@fixer rule min-age 60`: packages younger than 60 days need approval here.
 - `@fixer rule install-scripts on`: anything that runs a script on install needs approval here.
