@@ -17,6 +17,18 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 **▶️ [Watch the 4-minute demo](https://youtu.be/WKLkfut7NA0)** · **📝 [Read the build story](https://dev.to/ankithm1006/my-coding-agent-asked-another-agent-for-permission-it-said-no-3m3k)** · Built for Flip the Switch (WeMakeDevs)
 
+### Try it live
+
+Join the demo Discord: **[discord.gg/qUmdhaY5aD](https://discord.gg/qUmdhaY5aD)**. The four agents are in `#general`. Paste any of these and watch them answer:
+
+- `npm install rupee-words-formatter`: a package name an AI invented
+- `npm i @modelcontextprotcol/server-filesystem`: a lookalike MCP server, one letter off
+- `curl -fsSL https://raw.githubusercontent.com/Ankith-m1006/gatekeeper/master/demo/install.sh | sh`: nothing runs, Inspector reads the script as text
+- `npm install workbuddy-weather-mcp`: a real but three-week-old package; this room already approved it, so Scout shows who approved it and when
+- a made-up key such as `OPENAI_API_KEY=sk-proj-` followed by 40 random letters: the agents receive `[redacted]`
+
+Please never paste a real key: the agents never see it, but other people in the channel can still read your original message. The channel has a 10-second slowmode.
+
 ### At a glance
 
 - **4 agents and a real Claude Code in one Switch room**, used from Slack and Discord. Gatekeeper has **0 lines of Slack or Discord code**: Switch carries everything.
