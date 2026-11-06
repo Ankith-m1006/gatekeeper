@@ -15,7 +15,7 @@ Coding agents write `npm install` and `pip install` lines all day. Sometimes the
 
 Gatekeeper puts four agents into the room where that install line shows up. They are built on [Switch](https://github.com/sandbox-quantum/switch), so the same crew works in any chat Switch connects to: we run it in Slack and Discord, on desktop and phone.
 
-**▶️ [Watch the 4-minute demo](https://youtu.be/WKLkfut7NA0)** · **📝 [Read the build story](https://dev.to/ankithm1006/my-coding-agent-asked-another-agent-for-permission-it-said-no-3m3k)** · Built for Flip the Switch (WeMakeDevs)
+**▶️ [Watch the 4-minute demo](https://youtu.be/WKLkfut7NA0)** · **🔑 [20 s: a pasted key never reaches the agents](https://youtu.be/GGwekrxjcsU)** · **📝 [Read the build story](https://dev.to/ankithm1006/my-coding-agent-asked-another-agent-for-permission-it-said-no-3m3k)** · Built for Flip the Switch (WeMakeDevs)
 
 ### Try it live
 
