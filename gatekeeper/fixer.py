@@ -141,9 +141,14 @@ class Fixer:
             name = m.group(2)
             ecos = [m.group(1).lower()] if m.group(1) else ["npm", "pypi"]
             for eco in ecos:
-                self.policy.approve(ev.room_id, f"{eco}:{name}", ev.sender or "someone")
+                try:
+                    rep = await registry.check(eco, name)
+                    version = rep.latest if rep.exists else None
+                except Exception:
+                    version = None
+                self.policy.approve(ev.room_id, f"{eco}:{name}", ev.sender or "someone", version)
             await self.sync_ledger(ev.room_id)
-            await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'}, written in the \"{LEDGER}\" document. Scout will show it next time; say @fixer revoke {name} to take it back.")
+            await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'} (this version only: a new release gets checked again), written in the \"{LEDGER}\" document. Scout will show it next time; say @fixer revoke {name} to take it back.")
             return
         if not ev.addressed:
             return

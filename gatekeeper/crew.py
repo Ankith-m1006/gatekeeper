@@ -48,8 +48,9 @@ class RoomPolicy:
         self._room(room_id)["rules"][key] = value
         self.save()
 
-    def approve(self, room_id: str, key: str, by: str) -> None:
-        self._room(room_id)["approved"][key] = {"by": by, "at": time.strftime("%d %b %H:%M")}
+    def approve(self, room_id: str, key: str, by: str, version: str | None = None) -> None:
+        # Pinned to the version that was current when the person approved it: a new release is checked again.
+        self._room(room_id)["approved"][key] = {"by": by, "at": time.strftime("%d %b %H:%M"), "version": version}
         self.save()
 
     def revoke(self, room_id: str, key: str) -> bool:
@@ -73,6 +74,14 @@ class RoomPolicy:
 
 def key(r: PackageReport) -> str:
     return f"{r.ecosystem}:{r.name}"
+
+
+def approval_holds(approval: dict | None, r: PackageReport) -> bool:
+    """An approval covers only the version it was given for. A newer release is a fresh thing to check."""
+    if not approval:
+        return False
+    v = approval.get("version")
+    return v is None or r.latest is None or v == r.latest
 
 
 # ---------------- handoffs through Switch ----------------
@@ -136,7 +145,7 @@ def ledger_text(room: dict) -> str:
         "",
         "## Approved packages",
     ]
-    lines += [f"- {n}: approved by {v['by']} on {v['at']}" for n, v in seen.items()] or ["- none yet"]
+    lines += [f"- {n}{'@' + v['version'] if v.get('version') else ''}: approved by {v['by']} on {v['at']}" for n, v in seen.items()] or ["- none yet"]
     incidents = room.get("incidents", [])
     if incidents:
         lines += ["", "## Caught in this room"]

@@ -340,3 +340,13 @@ def test_replies_follow_the_thread():
         await a._safe(handler, Event("message", "r", {"thread_id": "t1"}, 1))
     asyncio.run(go())
     assert sent == [("post_message", "t1")] and THREAD.get() is None
+
+
+def test_approval_is_pinned_to_the_version():
+    from gatekeeper.crew import approval_holds
+    from gatekeeper.registry import PackageReport
+    rep = PackageReport("npm", "workbuddy-weather-mcp", True, latest="1.0.1")
+    assert approval_holds({"by": "a", "at": "x", "version": "1.0.1"}, rep)
+    assert not approval_holds({"by": "a", "at": "x", "version": "1.0.0"}, rep)  # new release: check again
+    assert approval_holds({"by": "a", "at": "x"}, rep)  # older ledgers without a version still count
+    assert not approval_holds(None, rep)

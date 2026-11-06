@@ -7,7 +7,7 @@ import logging
 import time
 
 from . import registry
-from .crew import CREW, DEFAULT_RULES, LEDGER, RoomPolicy, handoff, key, parse_ledger
+from .crew import approval_holds, CREW, DEFAULT_RULES, LEDGER, RoomPolicy, handoff, key, parse_ledger
 from .agent_guard import MCP_ADD, dangerous_commands, find_secrets, mcp_packages_in_config
 from .extract import INSTALL_LINE, is_dep_file, packages_in, packages_in_file, install_commands
 
@@ -202,7 +202,11 @@ class Scout:
             age, limit = r.age_days, rules.get("min_age_days", 30)
             if r.exists and age is not None and 30 <= age < limit:
                 r.flags.append(f"{age} days old (this room wants {limit}+)")
-        approvals = {key(r): ledger.get("approved", {}).get(key(r)) for r in reports}
+        raw = {key(r): ledger.get("approved", {}).get(key(r)) for r in reports}
+        approvals = {key(r): (raw[key(r)] if approval_holds(raw[key(r)], r) else None) for r in reports}
+        for r in reports:  # approved earlier, but this is a newer release: say so and check it again
+            if raw[key(r)] and not approvals[key(r)]:
+                r.flags.append(f"new release {r.latest}: the room approved {raw[key(r)].get('version')}, so this one is checked again")
         live = [r for r in reports if not approvals[key(r)]]
         worst = max((r.verdict for r in live), key=ORDER.index, default="ok")
         title = {
