@@ -40,6 +40,8 @@ async def main(names):
         elif name == "fixer":
             fx = Fixer(a, RoomPolicy())
             jobs += [a.run(fx.on_event), fx.publish_on_start()]
+    from gatekeeper import guardrail  # Switch calls it before delivering any message (see gatekeeper/guardrail.py)
+    jobs.append(guardrail.serve())
     await asyncio.gather(*jobs)
 
 
