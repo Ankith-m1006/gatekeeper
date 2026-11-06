@@ -95,7 +95,7 @@ Everything works by plain chat. Mention an agent to talk to it directly.
 
 Packages were the first door. The crew also covers the other ways things get into a project through a team's chat:
 
-- **Agent rules files.** Drop a `CLAUDE.md`, `AGENTS.md`, `.cursorrules` or similar and Inspector reads every character, including invisible Unicode tag characters that chat apps don't show but coding agents read. It decodes hidden instructions and Fixer posts a clean copy.
+- **Agent rules files.** Drop a `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` or another agent rules file and Inspector reads every character, including invisible Unicode tag characters that chat apps don't show but coding agents read. It decodes hidden instructions and Fixer posts a clean copy.
 - **MCP servers.** An `mcp.json` or a `claude mcp add` line: Scout checks each server package exists (catching typos like `@modelcontextprotcol/...`), and Inspector reads its tool descriptions for instructions aimed at the agent.
 - **Install scripts.** `curl ... | sh` is held. Inspector downloads the script as text, runs nothing, and reports what it does (for example, reading SSH keys and sending them out).
 - **Secrets.** A key pasted into the channel gets an immediate warning with the key redacted: rotate it now.
