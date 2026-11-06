@@ -192,7 +192,7 @@ Without Docker: `python -m venv .venv && . .venv/bin/activate && pip install -r 
 
 **5. Invite them.** In the chat: `!invite-agent @scout`, then `@inspector`, `@squat-watch`, `@fixer`, **one per message** (a multi-line message only runs the first line). Paste an install line, or drop a `package.json` or `requirements.txt`, and watch the crew work.
 
-**Tests:** `pip install pytest && python -m pytest -q tests` runs 33 offline tests (no network, no Switch). CI runs them on every push.
+**Tests:** `pip install pytest && python -m pytest -q tests` runs 53 offline tests (no network, no Switch). CI runs them on every push.
 
 ## Safety
 

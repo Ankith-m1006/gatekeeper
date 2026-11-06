@@ -7,3 +7,4 @@ state/
 eval/peek_tmp.py
 eval/results.json
 !.env.example
+*.tgz
