@@ -108,6 +108,8 @@ class Fixer:
             if any(g is None for g in swaps.values()):
                 lines.append("   ↳ a name with no real match usually means the coding agent invented it. Ask it which package it meant, or write those few lines yourself.")
         if need_ok:
+            self.policy.count(ev.room_id, "asked", len(need_ok))
+            await self.sync_ledger(ev.room_id)
             names = ", ".join(f"`{n}`" for n in need_ok)
             lines.append(f"✋ {names} {'is' if len(need_ok) == 1 else 'are'} not blocked, but this room asks a person to look first. {asker_of(ev.body)}, or anyone here: reply `approve {need_ok[0]}` to allow it, and I'll write it in the ledger.")
         if lines:
@@ -149,6 +151,7 @@ class Fixer:
                     except Exception:
                         version = None
                 self.policy.approve(ev.room_id, f"{eco}:{name}", ev.sender or "someone", version)
+            self.policy.count(ev.room_id, "approved")
             await self.sync_ledger(ev.room_id)
             await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'} (this version only: a new release gets checked again), written in the \"{LEDGER}\" document. Scout will show it next time; say @fixer revoke {name} to take it back.")
             return

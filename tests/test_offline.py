@@ -405,3 +405,13 @@ def test_guardrail_http_contract():
         return ok, bad
     (s1, b1), (s2, _) = asyncio.run(go())
     assert s1 == 200 and b1["outcome"] == "GUARDRAIL_RESULT_OUTCOME_OK" and s2 == 401
+
+
+def test_review_health_watches_for_reflex_approvals():
+    from gatekeeper.crew import ledger_text, review_health
+    assert review_health({}) == []
+    assert any("approved 1 (50%)" in l for l in review_health({"asked": 2, "approved": 1}))
+    tired = review_health({"asked": 12, "approved": 11})
+    assert any("reflex" in l for l in tired)
+    text = ledger_text({"rules": {}, "approved": {}, "stats": {"asked": 3, "approved": 1}})
+    assert "## Review health" in text and '"stats": {"asked": 3' in text

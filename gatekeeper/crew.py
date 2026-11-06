@@ -64,6 +64,12 @@ class RoomPolicy:
     def approvals(self, room_id: str) -> dict:
         return self._room(room_id)["approved"]
 
+    def count(self, room_id: str, what: str, n: int = 1) -> None:
+        """Review health: how often the room asked a person, and how often the answer was approve."""
+        st = self._room(room_id).setdefault("stats", {})
+        st[what] = st.get(what, 0) + n
+        self.save()
+
     def log_incident(self, room_id: str, what: str, who: str) -> None:
         """Record something the crew caught (a leaked key, a hidden instruction, a dangerous command)."""
         inc = self._room(room_id).setdefault("incidents", [])
@@ -151,12 +157,25 @@ def ledger_text(room: dict) -> str:
         "## Approved packages",
     ]
     lines += [f"- {n}{'@' + v['version'] if v.get('version') else ''}: approved by {v['by']} on {v['at']}" for n, v in seen.items()] or ["- none yet"]
+    lines += review_health(room.get("stats", {}))
     incidents = room.get("incidents", [])
     if incidents:
         lines += ["", "## Caught in this room"]
         lines += [f"- {i['at']}: {i['what']} ({i['who']})" for i in incidents[-20:]]
-    lines += ["", "```json", json.dumps({"rules": r, "approved": room.get("approved", {}), "incidents": incidents[-20:]}), "```"]
+    lines += ["", "```json", json.dumps({"rules": r, "approved": room.get("approved", {}), "incidents": incidents[-20:], "stats": room.get("stats", {})}), "```"]
     return "\n".join(lines)
+
+
+def review_health(stats: dict) -> list[str]:
+    """Ledger lines that show whether approvals are still real decisions (alert fatigue shows up here first)."""
+    asked, ok = stats.get("asked", 0), stats.get("approved", 0)
+    if not asked:
+        return []
+    rate = round(100 * min(ok, asked) / asked)
+    out = ["", "## Review health", f"- Asked a person {asked} time{'s' if asked != 1 else ''}; approved {ok} ({rate}%)."]
+    if asked >= 10 and rate >= 80:
+        out.append("- Almost every ask ends in approve. Either the rules are too strict for this room, or approvals have become a reflex: worth a look.")
+    return out
 
 
 def parse_ledger(content: str | None) -> dict | None:
