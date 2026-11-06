@@ -40,7 +40,7 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 **Squat Watch** guards the names that don't exist yet. It keeps this team's list of package names its agents invented, checks npm and PyPI every 5 minutes, and the moment one gets registered it alerts the room and hands the new package to Inspector. It counts how often a name comes back: a name your agents invent again and again is exactly the one an attacker will grab. It also learns the real packages your team installs and reads the npm and PyPI new-package feeds every 2 minutes, so a brand-new lookalike (say `expresss`) is flagged before anyone asks for it.
 
-**Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer writes who approved it and when into the room's **Gatekeeper ledger** (a Switch room document), and Scout reads that ledger before every check. Each room has its own rules, and Fixer welcomes new people to the room with them.
+**Fixer** rewrites the install line into a safe one (the real package instead of the lookalike, invented names removed) and holds the human approval gate. A risky package is not silently blocked: a person in the room types `approve <name>`, Fixer writes who approved it, when, and **which version** into the room's **Gatekeeper ledger** (a Switch room document), and Scout reads that ledger before every check. An approval covers only that version: a new release is treated as a fresh package and checked again, code included. Each room has its own rules, and Fixer welcomes new people to the room with them.
 
 ## What it looks like
 
