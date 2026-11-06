@@ -13,7 +13,16 @@
 
 Coding agents write `npm install` and `pip install` lines all day. Sometimes the package they ask for **does not exist**: the model invented the name. Attackers watch for exactly those invented names and register them with malware inside ("slopsquatting"). The next developer, or the next coding agent, installs it.
 
-Gatekeeper puts four agents into the room where that install line shows up. They are built on [Switch](https://github.com/sandbox-quantum/switch), so the same crew works in any chat Switch connects to (Discord today, Slack and others through the same Switch room).
+Gatekeeper puts four agents into the room where that install line shows up. They are built on [Switch](https://github.com/sandbox-quantum/switch), so the same crew works in any chat Switch connects to: we run it in Slack and Discord, on desktop and phone.
+
+**▶️ [Watch the 4-minute demo](https://youtu.be/WKLkfut7NA0)** · **📝 [Read the build story](https://dev.to/ankithm1006/my-coding-agent-asked-another-agent-for-permission-it-said-no-3m3k)** · Built for Flip the Switch (WeMakeDevs)
+
+### At a glance
+
+- **4 agents and a real Claude Code in one Switch room**, used from Slack and Discord. Gatekeeper has **0 lines of Slack or Discord code**: Switch carries everything.
+- **Six doors guarded:** packages that don't exist, lookalike packages, MCP servers, hidden instructions in agent rules files like `CLAUDE.md`, `curl | sh` installers, and API keys pasted into chat.
+- **Held-out real malware:** Inspector flags **84%** on PyPI and **60.5%** on npm, and wrongly flags **1 in 500** popular npm packages.
+- **No AI model makes the call.** Every verdict comes from live npm and PyPI checks and code read as text. Anything uncertain waits for a person to type `approve`.
 
 ## The crew
 
@@ -82,6 +91,16 @@ Everything works by plain chat. Mention an agent to talk to it directly.
 - `@squat-watch list`: names this team's agents invented, and how often.
 - `@squat-watch npm:some-name`: watch a name by hand.
 
+## Beyond packages
+
+Packages were the first door. The crew also covers the other ways things get into a project through a team's chat:
+
+- **Agent rules files.** Drop a `CLAUDE.md`, `AGENTS.md`, `.cursorrules` or similar and Inspector reads every character, including invisible Unicode tag characters that chat apps don't show but coding agents read. It decodes hidden instructions and Fixer posts a clean copy.
+- **MCP servers.** An `mcp.json` or a `claude mcp add` line: Scout checks each server package exists (catching typos like `@modelcontextprotcol/...`), and Inspector reads its tool descriptions for instructions aimed at the agent.
+- **Install scripts.** `curl ... | sh` is held. Inspector downloads the script as text, runs nothing, and reports what it does (for example, reading SSH keys and sending them out).
+- **Secrets.** A key pasted into the channel gets an immediate warning with the key redacted: rotate it now.
+- **A real coding agent in the room.** A Claude Code session joins the same room through Switch Console. The room's instructions tell it to post every install command and wait for Scout, so it asks the crew first and acts on the verdict.
+
 ## Why this needs Switch
 
 Gatekeeper is not a bot with four names. It is four agents that each have their own Switch identity, owner and connection, sitting in a Switch room next to the humans. Take Switch away and it stops working:
@@ -139,7 +158,7 @@ Full output: [`eval/RESULTS.md`](eval/RESULTS.md). Reproduce with `python -m eva
 
 ## Run it
 
-**1. A Switch server.** Follow [Host Switch for your team](https://docs.switchagents.ai/switch-rooms/deploy/self-host.md). We run Switch 0.31.0 with Docker Compose on a small cloud VM (2 vCPU, 8 GB), with its ports bound to 127.0.0.1, and reach it from a laptop through an SSH tunnel. Connect your chat in Switch Console (we use Discord; Slack works the same way), which turns a channel into a Switch room.
+**1. A Switch server.** Follow [Host Switch for your team](https://docs.switchagents.ai/switch-rooms/deploy/self-host.md). We run Switch 0.31.0 with Docker Compose on a small cloud VM (2 vCPU, 8 GB), with its ports bound to 127.0.0.1, and reach it from a laptop through an SSH tunnel. Connect your chat in Switch Console (we use both Slack and Discord), which turns a channel into a Switch room.
 
 **2. A registration key.** In Switch Console, create a registration key **as yourself** (the owner). Agents registered with a separate registration account work, but you can't manage or address them from your own account.
 
