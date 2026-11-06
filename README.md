@@ -19,6 +19,8 @@ Gatekeeper puts four agents into the room where that install line shows up. They
 
 ### Try it live
 
+<a href="https://discord.gg/qUmdhaY5aD"><img src="assets/try-live.png" alt="Try Gatekeeper live: join the demo Discord and paste an install line into #general" width="720"></a>
+
 Join the demo Discord: **[discord.gg/qUmdhaY5aD](https://discord.gg/qUmdhaY5aD)**. The four agents are in `#general`. Paste any of these and watch them answer:
 
 - `npm install rupee-words-formatter`: a package name an AI invented
