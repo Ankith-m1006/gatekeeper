@@ -90,7 +90,7 @@ class RoomPolicy:
 def may_approve(sender_kind: str) -> bool:
     """Only a person may approve a risky package. Switch labels every message's sender; an agent
     (including the coding agent that asked for the install) is refused, so no agent can approve its own work."""
-    return sender_kind not in ("agent", "platform")
+    return sender_kind == "user"  # fail closed: agents, the platform and unknown senders cannot approve
 
 
 def key(r: PackageReport) -> str:

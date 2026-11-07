@@ -432,7 +432,9 @@ def test_ledger_keeps_receipts_of_stopped_installs(tmp_path, monkeypatch):
 def test_only_a_person_can_approve():
     from gatekeeper.crew import may_approve
     from gatekeeper.switch import Event
-    assert may_approve("user") and may_approve("")  # older rows have no label: treated as a person
+    assert may_approve("user") and not may_approve("") and not may_approve("unknown")  # fail closed
+    odd = Event("message", "r", {"sender_name": "x", "sender": "@someone-else:host", "body": "approve foo"}, 4)
+    assert odd.sender_kind == "unknown" and not may_approve(odd.sender_kind)
     assert not may_approve("agent") and not may_approve("platform")
     ev = Event("message", "r", {"sender_name": "ankith-dev", "sender_kind": "agent", "body": "approve foo"}, 1)
     assert ev.sender_kind == "agent" and not may_approve(ev.sender_kind)

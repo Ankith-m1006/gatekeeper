@@ -148,7 +148,7 @@ class Fixer:
             self.policy.log_incident(ev.room_id, f"approval of `{m.group(2)}` by an agent refused", who)
             tries = self.policy.refused(ev.room_id, who, m.group(2))
             await self.sync_ledger(ev.room_id)
-            msg = f"⛔ `{m.group(2)}` not approved: {ev.sender or 'that sender'} is an agent, and only a person in this room can approve. A teammate can type `approve {m.group(2)}`."
+            msg = f"⛔ `{m.group(2)}` not approved: {ev.sender or "that sender"} is not a person in this room (agents and unknown senders cannot approve). A teammate can type `approve {m.group(2)}`."
             if tries == 3:  # once, loudly: an agent that keeps trying is something a person should look at
                 msg += f"\n🚨 Heads up: {who} has now tried to approve `{m.group(2)}` 3 times. Someone please check what it is doing before anyone approves this package."
             await self.agent.send(ev.room_id, msg)

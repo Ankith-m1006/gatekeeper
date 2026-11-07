@@ -8,6 +8,7 @@ import asyncio
 import contextvars
 import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,6 +25,10 @@ THREAD: contextvars.ContextVar[str | None] = contextvars.ContextVar("thread", de
 STATE_DIR = Path(__file__).resolve().parent.parent / "state"
 
 Handler = Callable[["Event"], Awaitable[None]]
+
+
+# Participant ids Switch gives people: chat-bridge users (discord, slack, mattermost, telegram, teams) and console users.
+HUMAN_ID = re.compile(r"^@switch-(?:user-|admin(?::|$)|(?:discord|slack|mattermost|telegram|teams)-)")
 
 
 @dataclass
@@ -53,9 +58,12 @@ class Event:
         kind = str(self.payload.get("sender_kind") or "")
         if kind:
             return kind
-        # Live events may omit the label; Switch gives every agent a participant id like @switch-agent-<id>:host.
-        sender_id = str(self.payload.get("sender") or "")
-        return "agent" if sender_id.startswith("@switch-agent-") else ""
+        # Live events may omit the label. Fail closed: agents have ids like @switch-agent-<id>:host, people on a
+        # chat bridge or the console have known human prefixes; anything else is "unknown" and cannot approve.
+        sender_id = str(self.payload.get("sender") or "").lower()
+        if sender_id.startswith("@switch-agent-"):
+            return "agent"
+        return "user" if HUMAN_ID.match(sender_id) else "unknown"
 
     @property
     def message_id(self) -> str | None:
