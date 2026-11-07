@@ -12,7 +12,7 @@ import re
 
 from . import registry
 from .agent_guard import clean_lines
-from .crew import CREW, LEDGER, RoomPolicy, asker_of, ledger_text, my_part
+from .crew import may_approve, CREW, LEDGER, RoomPolicy, asker_of, ledger_text, my_part
 from .extract import INSTALL_LINE, packages_in
 from .switch import Agent, Event
 
@@ -143,7 +143,12 @@ class Fixer:
             return
         body = ev.body.strip()
         m = APPROVE.match(body)
-        if m:  # anyone in the room may approve; their name is recorded
+        if m and not may_approve(ev.sender_kind):  # Switch says an agent sent this: refused, a person decides
+            self.policy.log_incident(ev.room_id, f"approval of `{m.group(2)}` by an agent refused", ev.sender or "an agent")
+            await self.sync_ledger(ev.room_id)
+            await self.agent.send(ev.room_id, f"⛔ `{m.group(2)}` not approved: {ev.sender or 'that sender'} is an agent, and only a person in this room can approve. A teammate can type `approve {m.group(2)}`.")
+            return
+        if m:  # any person in the room may approve; their name is recorded
             name = m.group(2)
             ecos = [m.group(1).lower()] if m.group(1) else ["npm", "pypi"]
             for eco in ecos:

@@ -427,3 +427,15 @@ def test_ledger_keeps_receipts_of_stopped_installs(tmp_path, monkeypatch):
     assert "## Caught in this room" in text
     assert "invented package `rupee-words-formatter` stopped (ankith)" in text
     assert "lookalike `expres` swapped for `express`" in text
+
+
+def test_only_a_person_can_approve():
+    from gatekeeper.crew import may_approve
+    from gatekeeper.switch import Event
+    assert may_approve("user") and may_approve("")  # older rows have no label: treated as a person
+    assert not may_approve("agent") and not may_approve("platform")
+    ev = Event("message", "r", {"sender_name": "ankith-dev", "sender_kind": "agent", "body": "approve foo"}, 1)
+    assert ev.sender_kind == "agent" and not may_approve(ev.sender_kind)
+    agent_by_id = Event("message", "r", {"sender_name": "probe", "sender": "@switch-agent-82e8abc7:localhost", "body": "approve foo"}, 2)
+    person = Event("message", "r", {"sender_name": "ankithm0454", "sender": "@switch-discord-2193-ankithm0454:localhost", "body": "approve foo"}, 3)
+    assert not may_approve(agent_by_id.sender_kind) and may_approve(person.sender_kind)

@@ -48,6 +48,16 @@ class Event:
         return str(self.payload.get("sender_name") or self.payload.get("sender") or "")
 
     @property
+    def sender_kind(self) -> str:
+        """Switch's own label for the sender: "user" (a person on a bridge), "agent" or "platform"."""
+        kind = str(self.payload.get("sender_kind") or "")
+        if kind:
+            return kind
+        # Live events may omit the label; Switch gives every agent a participant id like @switch-agent-<id>:host.
+        sender_id = str(self.payload.get("sender") or "")
+        return "agent" if sender_id.startswith("@switch-agent-") else ""
+
+    @property
     def message_id(self) -> str | None:
         return self.payload.get("message_id")
 
