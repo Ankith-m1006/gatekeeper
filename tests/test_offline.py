@@ -439,3 +439,11 @@ def test_only_a_person_can_approve():
     agent_by_id = Event("message", "r", {"sender_name": "probe", "sender": "@switch-agent-82e8abc7:localhost", "body": "approve foo"}, 2)
     person = Event("message", "r", {"sender_name": "ankithm0454", "sender": "@switch-discord-2193-ankithm0454:localhost", "body": "approve foo"}, 3)
     assert not may_approve(agent_by_id.sender_kind) and may_approve(person.sender_kind)
+
+
+def test_repeated_agent_approvals_are_counted(tmp_path, monkeypatch):
+    from gatekeeper import crew
+    monkeypatch.setattr(crew, "STATE", tmp_path)
+    p = crew.RoomPolicy()
+    assert [p.refused("r", "Probe", "is-odd") for _ in range(3)] == [1, 2, 3]
+    assert p.refused("r", "probe", "left-pad") == 1  # counted per agent AND package

@@ -70,6 +70,15 @@ class RoomPolicy:
         st[what] = st.get(what, 0) + n
         self.save()
 
+    def refused(self, room_id: str, who: str, package: str) -> int:
+        """Count refused approvals by one agent for one package; returns the new total.
+        Repeated tries mean the agent keeps rephrasing its way at the gate, which a person should see."""
+        r = self._room(room_id).setdefault("refusals", {})
+        key = f"{who.lower()}|{package.lower()}"
+        r[key] = r.get(key, 0) + 1
+        self.save()
+        return r[key]
+
     def log_incident(self, room_id: str, what: str, who: str) -> None:
         """Record something the crew caught (a leaked key, a hidden instruction, a dangerous command)."""
         inc = self._room(room_id).setdefault("incidents", [])

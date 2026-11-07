@@ -144,9 +144,14 @@ class Fixer:
         body = ev.body.strip()
         m = APPROVE.match(body)
         if m and not may_approve(ev.sender_kind):  # Switch says an agent sent this: refused, a person decides
-            self.policy.log_incident(ev.room_id, f"approval of `{m.group(2)}` by an agent refused", ev.sender or "an agent")
+            who = ev.sender or "an agent"
+            self.policy.log_incident(ev.room_id, f"approval of `{m.group(2)}` by an agent refused", who)
+            tries = self.policy.refused(ev.room_id, who, m.group(2))
             await self.sync_ledger(ev.room_id)
-            await self.agent.send(ev.room_id, f"⛔ `{m.group(2)}` not approved: {ev.sender or 'that sender'} is an agent, and only a person in this room can approve. A teammate can type `approve {m.group(2)}`.")
+            msg = f"⛔ `{m.group(2)}` not approved: {ev.sender or 'that sender'} is an agent, and only a person in this room can approve. A teammate can type `approve {m.group(2)}`."
+            if tries == 3:  # once, loudly: an agent that keeps trying is something a person should look at
+                msg += f"\n🚨 Heads up: {who} has now tried to approve `{m.group(2)}` 3 times. Someone please check what it is doing before anyone approves this package."
+            await self.agent.send(ev.room_id, msg)
             return
         if m:  # any person in the room may approve; their name is recorded
             name = m.group(2)
