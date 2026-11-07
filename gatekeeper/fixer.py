@@ -22,6 +22,10 @@ REVOKE = re.compile(r"revoke\s+(?:(npm|pypi)[:\s]+)?(@?[\w./-]+)", re.I)
 RULE = re.compile(r"rule\s+(min-age|install-scripts)\s+(\S+)", re.I)
 CLEAN = re.compile(r"Fixer, clean `([^`]+)` ([a-z][\w+.-]*://\S+)")
 LOG = re.compile(r"Fixer, log: (.+)")
+# A newcomer asking what the room is for, without tagging anyone ("what is this channel for? how can I use it")
+HELP = re.compile(r"\b(how (?:do|can|should) (?:i|we) (?:use|try|test)|what(?:'s| is)? (?:this|the) (?:channel|room|bot|for)|what for this|^help\b|how does this work)", re.I)
+TRY_IT = ("👉 **Try it:** paste an install line like `npm install expresss` or `pip install reqests` (typos on purpose), "
+          "an MCP config, or a `curl ... | sh` line, and watch Scout, Inspector and me react. Tag @fixer to see this room's rules.")
 
 
 def rewrite(text: str, swaps: dict[str, str | None]) -> list[str]:
@@ -128,7 +132,11 @@ class Fixer:
             f"👋 Welcome, {who}. This room has a security crew for people and their coding agents. Scout checks every package and MCP server before it's added, "
             f"and speaks up on leaked keys and dangerous commands. Inspector reads risky code, MCP tool descriptions and agent rules files "
             f"(including text you can't see). Squat Watch tracks names agents invent, and I keep the rules and hand you safe versions. "
-            f"Here, packages younger than {r['min_age_days']} days need a person's approval. The full rules are in the room document \"{LEDGER}\"."))
+            f"Here, packages younger than {r['min_age_days']} days need a person's approval. The full rules are in the room document \"{LEDGER}\".\n"
+            + TRY_IT))
+
+    async def help(self, ev: Event) -> None:
+        await self.agent.send(ev.room_id, f"Hi {ev.sender or 'there'}! This room checks what coding agents install, before they install it.\n" + TRY_IT)
 
     async def on_event(self, ev: Event) -> None:
         if ev.type == "room_join":
@@ -170,6 +178,8 @@ class Fixer:
             await self.agent.send(ev.room_id, f"✅ `{name}` approved for this room by {ev.sender or 'someone'} (this version only: a new release gets checked again), written in the \"{LEDGER}\" document. Scout will show it next time; say @fixer revoke {name} to take it back.")
             return
         if not ev.addressed:
+            if HELP.search(body) and not ev.sender_kind == "agent":
+                await self.help(ev)
             return
         if m := REVOKE.search(body):
             name = m.group(2)

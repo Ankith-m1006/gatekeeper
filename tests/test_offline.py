@@ -449,3 +449,11 @@ def test_repeated_agent_approvals_are_counted(tmp_path, monkeypatch):
     p = crew.RoomPolicy()
     assert [p.refused("r", "Probe", "is-odd") for _ in range(3)] == [1, 2, 3]
     assert p.refused("r", "probe", "left-pad") == 1  # counted per agent AND package
+
+
+def test_newcomer_help_questions_are_recognised():
+    from gatekeeper.fixer import HELP
+    for q in ["what for this channel?", "how can i use it", "How do I try this", "what is this room for", "help", "how does this work?"]:
+        assert HELP.search(q), q
+    for q in ["npm install expresss", "approve foo", "nice work everyone"]:
+        assert not HELP.search(q), q
