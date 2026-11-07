@@ -415,3 +415,15 @@ def test_review_health_watches_for_reflex_approvals():
     assert any("reflex" in l for l in tired)
     text = ledger_text({"rules": {}, "approved": {}, "stats": {"asked": 3, "approved": 1}})
     assert "## Review health" in text and '"stats": {"asked": 3' in text
+
+
+def test_ledger_keeps_receipts_of_stopped_installs(tmp_path, monkeypatch):
+    from gatekeeper import crew
+    monkeypatch.setattr(crew, "STATE", tmp_path)
+    p = crew.RoomPolicy()
+    p.log_incident("r1", "invented package `rupee-words-formatter` stopped", "ankith")
+    p.log_incident("r1", "lookalike `expres` swapped for `express`", "ankith")
+    text = crew.ledger_text(p.data["r1"])
+    assert "## Caught in this room" in text
+    assert "invented package `rupee-words-formatter` stopped (ankith)" in text
+    assert "lookalike `expres` swapped for `express`" in text

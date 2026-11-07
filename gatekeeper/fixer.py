@@ -98,7 +98,11 @@ class Fixer:
             elif r.verdict in ("suspicious", "danger"):
                 need_ok.append(r.name)
         lines = []
+        for bad, good in swaps.items():  # the ledger keeps a receipt of every install the crew stopped
+            what = f"invented package `{bad}` stopped" if good is None else f"lookalike `{bad}` swapped for `{good}`"
+            self.policy.log_incident(ev.room_id, what, asker_of(ev.body))
         if swaps:
+            await self.sync_ledger(ev.room_id)
             fixed = rewrite(part, swaps)
             what = ", ".join(f"`{b}` → `{g}`" if g else f"`{b}` removed" for b, g in swaps.items())
             if fixed:
